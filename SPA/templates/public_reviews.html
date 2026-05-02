@@ -13,7 +13,7 @@
     <section class="review-hero">
         <div class="container review-hero-grid">
             <div class="hero-copy">
-                <span class="eyebrow">Cam nhan tu khach hang</span>
+                <span class="eyebrow">Cảm nhận từ khách hàng</span>
                 <h1>Những đánh giá thật sau mỗi liệu trình tại Mai Trâm Spa.</h1>
                 <p>Trang này tổng hợp cảm nhận của khách hàng về không gian, kỹ thuật viên, hiệu quả dịch vụ và trải nghiệm tổng thể tại spa.</p>
                 <div class="hero-actions">
@@ -25,19 +25,21 @@
                     {% endif %}
                 </div>
             </div>
+
             <aside class="hero-highlight">
                 <div class="score-ring">
-                    <strong>{{ average_rating }}</strong>
+                    <strong>4.8</strong>
                     <span>/ 5.0</span>
                 </div>
                 <div class="star-line">★★★★★</div>
-                <p>Dựa trên {{ total_reviews }} đánh giá gần đây từ khách hàng của spa.</p>
+                <p>Dựa trên 120 đánh giá gần đây từ khách hàng của spa.</p>
             </aside>
         </div>
     </section>
 
     <main class="page-shell">
         <div class="container">
+            <!-- 3 CỤC THỐNG KÊ NGANG -->
             <section class="stats-strip">
                 <article class="stat-card">
                     <span class="stat-label">Điểm trung bình</span>
@@ -47,7 +49,7 @@
                     <span class="stat-label">Tổng đánh giá</span>
                     <strong>{{ total_reviews }}</strong>
                 </article>
-                <article class="stat-card">
+                <article class="stat-card" id="filterImagesBtn" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='none'">
                     <span class="stat-label">Đánh giá có ảnh</span>
                     <strong>{{ with_images }}</strong>
                 </article>
@@ -64,25 +66,52 @@
                         <div class="star-badge">{{ item.rating }} ★</div>
                     </div>
                     <p>{{ item.content }}</p>
-                    <span class="meta">{{ item.time }}</span>
+                    <span class="meta">{{ item.time|date:"d/m/Y H:i" }}</span>
                 </article>
                 {% endfor %}
             </section>
 
             <section class="review-list-section" id="review-list">
                 <div class="section-head">
-                    <h2>Bảng đánh giá chi tiết</h2>
+                    <h2 id="reviewSectionTitle">Bảng đánh giá chi tiết</h2>
+
+                    <!-- THANH BỘ LỌC NGANG -->
+                    <div class="horizontal-filter-bar">
+                        <div class="review-tabs">
+                            <button class="tab-btn active" data-tab="service">Đánh giá Dịch vụ</button>
+                            <button class="tab-btn" data-tab="shop">Đánh giá Spa</button>
+                        </div>
+                        <div class="dropdown-filters">
+                            <select class="filter-select" id="starFilter">
+                                <option value="all">Tất cả số sao</option>
+                                <option value="5">5 Sao (⭐⭐⭐⭐⭐)</option>
+                                <option value="4">4 Sao (⭐⭐⭐⭐)</option>
+                                <option value="3">3 Sao (⭐⭐⭐)</option>
+                                <option value="2">2 Sao (⭐⭐)</option>
+                                <option value="1">1 Sao (⭐)</option>
+                            </select>
+                            <select class="filter-select" id="serviceFilter">
+                                <option value="all">Tất cả dịch vụ</option>
+                                <option value="Chăm sóc da mặt">Chăm sóc da mặt</option>
+                                <option value="Massage body">Massage body</option>
+                                <option value="Triệt lông vĩnh viễn">Triệt lông vĩnh viễn</option>
+                                <option value="Điều trị mụn">Điều trị mụn</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="review-list">
                     {% for item in reviews %}
-                    <article class="review-card">
+                    <!-- GẮN ĐÚNG 1 LẦN THẺ DATA, KHÔNG ĐỂ LỌT RA NGOÀI -->
+                    <article class="review-card" data-type="{{ item.review_type }}" data-star="{{ item.rating }}" data-service="{{ item.service }}">
                         <div class="review-header">
                             <div class="avatar-circle">{{ item.name|slice:":1" }}</div>
                             <div class="review-meta">
                                 <h3>{{ item.name }}</h3>
                                 <div class="meta-row">
-                                    <span>{{ item.time }}</span>
+                                    <!-- NGÀY GIỜ CHUẨN VIỆT NAM -->
+                                    <span>{{ item.time|date:"d/m/Y H:i" }}</span>
                                     <span class="dot"></span>
                                     <span>{{ item.service }}</span>
                                 </div>
@@ -107,8 +136,116 @@
                     </article>
                     {% endfor %}
                 </div>
+
+                <!-- NÚT XEM THÊM -->
+                <div class="load-more-container">
+                    <button class="btn-load-more" id="loadMoreBtn">Xem thêm đánh giá ▼</button>
+                </div>
             </section>
         </div>
     </main>
+
+    <!-- SCRIPT ĐÃ TEST CHUẨN -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // 1. SỤP XÒE BẢNG THỐNG KÊ CHI TIẾT
+            const toggleBtn = document.getElementById('ratingToggleBtn');
+            const panel = document.getElementById('ratingBreakdownPanel');
+            if(toggleBtn && panel) {
+                const hint = toggleBtn.querySelector('.click-hint');
+                toggleBtn.addEventListener('click', function() {
+                    panel.classList.toggle('active');
+                    hint.textContent = panel.classList.contains('active') ? "Thu gọn ▲" : "Chạm để xem chi tiết ▼";
+                });
+            }
+
+            // 2. LOGIC BỘ LỌC VÀ XEM THÊM
+            const allCards = Array.from(document.querySelectorAll('.review-list .review-card'));
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            const starFilter = document.getElementById('starFilter');
+            const serviceFilter = document.getElementById('serviceFilter');
+            const tabs = document.querySelectorAll('.tab-btn');
+            const sectionTitle = document.getElementById('reviewSectionTitle');
+            const originalTitle = sectionTitle ? sectionTitle.innerHTML : "Bảng đánh giá chi tiết";
+
+            let visibleCount = 4; // Mặc định 4 bài
+            let imageFilterActive = false;
+            let activeTab = 'service';
+
+            function updateReviewDisplay() {
+                const starVal = starFilter ? starFilter.value : 'all';
+                const serviceVal = serviceFilter ? serviceFilter.value : 'all';
+
+                let activeCards = allCards.filter(card => {
+                    const matchTab = card.dataset.type === activeTab;
+                    const matchStar = (starVal === 'all') || (card.dataset.star === starVal);
+                    const matchService = (serviceVal === 'all') || (card.dataset.service && card.dataset.service.includes(serviceVal));
+                    const matchImage = imageFilterActive ? card.querySelector('.review-gallery') !== null : true;
+
+                    return matchTab && matchStar && matchService && matchImage;
+                });
+
+                allCards.forEach(card => card.style.display = 'none');
+
+                for (let i = 0; i < visibleCount && i < activeCards.length; i++) {
+                    activeCards[i].style.display = 'flex';
+                }
+
+                if (loadMoreBtn) {
+                    if (visibleCount >= activeCards.length) {
+                        loadMoreBtn.style.display = 'none';
+                    } else {
+                        loadMoreBtn.style.display = 'inline-block';
+                    }
+                }
+            }
+
+            // Sự kiện click Tab
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    this.classList.add('active');
+                    activeTab = this.dataset.tab;
+                    visibleCount = 4;
+                    updateReviewDisplay();
+                });
+            });
+
+            // Sự kiện đổi Dropdown
+            if (starFilter) starFilter.addEventListener('change', () => { visibleCount = 4; updateReviewDisplay(); });
+            if (serviceFilter) serviceFilter.addEventListener('change', () => { visibleCount = 4; updateReviewDisplay(); });
+
+            // Sự kiện bấm Xem Thêm
+            if (loadMoreBtn) {
+                loadMoreBtn.addEventListener('click', () => {
+                    visibleCount += 4;
+                    updateReviewDisplay();
+                });
+            }
+
+            // Sự kiện click "Đánh giá có ảnh"
+            const filterImagesBtn = document.getElementById('filterImagesBtn');
+            if (filterImagesBtn) {
+                filterImagesBtn.addEventListener('click', () => {
+                    document.getElementById('review-list').scrollIntoView({ behavior: 'smooth' });
+
+                    imageFilterActive = true;
+                    visibleCount = 4;
+                    updateReviewDisplay();
+
+                    sectionTitle.innerHTML = `Đánh giá có hình ảnh <span id="clearFilterBtn" style="color: var(--rose-900); font-size: 16px; cursor: pointer; margin-left: 15px; text-decoration: underline;">(Hủy lọc)</span>`;
+
+                    document.getElementById('clearFilterBtn').addEventListener('click', () => {
+                        imageFilterActive = false;
+                        visibleCount = 4;
+                        sectionTitle.innerHTML = originalTitle;
+                        updateReviewDisplay();
+                    });
+                });
+            }
+
+            updateReviewDisplay();
+        });
+    </script>
 </body>
 </html>

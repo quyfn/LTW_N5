@@ -1,21 +1,6 @@
-"""
-URL configuration for SPA project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path
+from services.views import public_reviews
 
 from .views import (
     home_entry,
@@ -28,7 +13,9 @@ from .views import (
     customer_dashboard,
     customer_detail,
     customer_account,
+    cancel_booking,
     booking_page,
+    booking_slots,
     feedback_dashboard,
     feedback_detail,
     service_dashboard,
@@ -36,7 +23,7 @@ from .views import (
     service_detail,
     customer_consultation_page,
     about_page,
-    public_review_page,
+    # Xóa chữ public_review_page ở đây rồi nha
 )
 
 urlpatterns = [
@@ -53,12 +40,16 @@ urlpatterns = [
     path('quan-ly/khach-hang/', customer_dashboard, name='customer_dashboard'),
     path('quan-ly/khach-hang/<int:customer_id>/', customer_detail, name='customer_detail'),
     path('tai-khoan/', customer_account, name='customer_account'),
+    path('tai-khoan/huy-lich/<int:booking_id>/', cancel_booking, name='cancel_booking'),
     path('dat-lich/', booking_page, name='booking'),
+    path('dat-lich/khung-gio/', booking_slots, name='booking_slots'),
     path('tu-van/', customer_consultation_page, name='customer_consultation'),
     path('services/', see_service, name='see_service'),
     path('services/<slug:slug>/', service_detail, name='service_detail'),
     path('gioi-thieu/', about_page, name='about_page'),
-    path('danh-gia/', public_review_page, name='public_review_page'),
+    
+    # CHỖ NÀY ĐÃ TRỎ VÀO HÀM MỚI CỦA TAO
+    path('danh-gia/', public_reviews, name='public_review_page'),
 
     # Legacy aliases kept for older templates/scripts.
     path('lich-hen/', appointment_dashboard),

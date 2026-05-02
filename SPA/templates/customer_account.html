@@ -5,40 +5,113 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý tài khoản | Mai Trâm Spa</title>
-    <link rel="stylesheet" href="{% static 'css/customer-account.css' %}?v=2">
+    <link rel="stylesheet" href="{% static 'css/customer-account.css' %}?v=3">
+
+    <!-- CSS CHUẨN MENU NẰM NGANG KIỂU VIÊN THUỐC (PILL) -->
+    <style>
+        .account-shell {
+            display: flex !important;
+            flex-direction: column !important;
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+            gap: 30px;
+        }
+
+        .main-panel {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .top-tabs-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .pill-menu {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .tab-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 28px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            text-decoration: none;
+            color: #64748b;
+            background: #ffffff;
+            border: 2px solid #fce7f3;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .tab-pill:hover {
+            border-color: #ff6495;
+            color: #ff6495;
+        }
+
+        .tab-pill.active {
+            background: #ff6495;
+            color: #ffffff;
+            border-color: #ff6495;
+            box-shadow: 0 4px 10px rgba(255, 100, 149, 0.3);
+        }
+
+        .logout-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-weight: 600;
+            text-decoration: none;
+            color: #ef4444;
+            background: #ffffff;
+            border: 2px solid #fee2e2;
+            transition: all 0.2s ease;
+        }
+
+        .logout-pill:hover {
+            background: #fee2e2;
+            border-color: #fca5a5;
+        }
+    </style>
 </head>
 <body>
 {% include 'includes/customer_navbar.html' %}
     <div class="account-shell">
-        <aside class="sidebar">
-            <a class="brand" href="{% url 'about_page' %}">
-                <span class="brand-title">MAI TRÂM</span>
-                <span class="brand-subtitle">Beauty &amp; Spa</span>
-            </a>
 
-            <nav class="sidebar-menu">
-                <a class="sidebar-link {% if active_tab == 'profile' %}active{% endif %}" href="{% url 'customer_account' %}?tab=profile">
-                    <span class="sidebar-icon">◔</span>
-                    <span>Thông tin cá nhân</span>
+        <!-- THANH MENU NẰM NGANG -->
+        <div class="top-tabs-container">
+            <nav class="pill-menu">
+                <a class="tab-pill {% if active_tab == 'profile' %}active{% endif %}" href="{% url 'customer_account' %}?tab=profile">
+                    Thông tin cá nhân
                 </a>
-                <a class="sidebar-link {% if active_tab == 'history' %}active{% endif %}" href="{% url 'customer_account' %}?tab=history">
-                    <span class="sidebar-icon">◷</span>
-                    <span>Lịch sử dịch vụ</span>
+                <a class="tab-pill {% if active_tab == 'history' %}active{% endif %}" href="{% url 'customer_account' %}?tab=history">
+                    Lịch sử dịch vụ
                 </a>
-                <a class="sidebar-link {% if active_tab == 'points' %}active{% endif %}" href="{% url 'customer_account' %}?tab=points">
-                    <span class="sidebar-icon">★</span>
-                    <span>Điểm tích lũy</span>
+                <a class="tab-pill {% if active_tab == 'points' %}active{% endif %}" href="{% url 'customer_account' %}?tab=points">
+                    Điểm tích lũy
                 </a>
             </nav>
 
-            <a class="logout-link" href="{% url 'user_logout' %}">
-                <span class="sidebar-icon">⇥</span>
-                <span>Đăng xuất</span>
+            <a class="logout-pill" href="{% url 'user_logout' %}">
+                Đăng xuất ⇥
             </a>
-        </aside>
+        </div>
 
         <main class="main-panel">
-
             <section class="workspace">
                 <section class="welcome-card">
                     <h1>Xin chào, {{ display_name }}!</h1>
@@ -64,7 +137,23 @@
 
                     <div class="history-board">
                         {% for item in history_items %}
-                        <article class="history-item">
+                        <!-- ĐÃ BƠM data-* ĐỂ JAVASCRIPT ĐỌC MÀ VẼ BẢNG 2 CỘT -->
+                        <article class="history-item" style="cursor: pointer;"
+                            data-service="{{ item.service|default:'' }}"
+                            data-package="{{ item.package|default:'' }}"
+                            data-sessions="{{ item.sessions|default:'' }}"
+                            data-date="{{ item.date|default:'' }}"
+                            data-time="{{ item.time|default:'' }}"
+                            data-price="{{ item.price|default:'' }}"
+                            data-status="{{ item.status|default:'' }}"
+                            data-can-cancel="{{ item.can_cancel|yesno:'true,false' }}"
+                            data-cancel-url="{{ item.cancel_url|default:'' }}"
+                            data-desc="{{ item.desc|default:'' }}"
+                            data-cname="{{ item.c_name|default:'' }}"
+                            data-cphone="{{ item.c_phone|default:'' }}"
+                            data-cemail="{{ item.c_email|default:'' }}"
+                            data-cnotes="{{ item.c_notes|default:'' }}">
+
                             <div class="history-main">
                                 <strong>{{ item.service }}</strong>
                                 <span>{{ item.date }}</span>
@@ -75,6 +164,7 @@
                         {% endfor %}
                     </div>
                 </section>
+
                 {% elif active_tab == 'points' %}
                 <section class="content-card">
                     <div class="section-header">
@@ -117,7 +207,7 @@
                         </div>
                     </div>
 
-                    <form method="post" class="profile-form">
+                    <form method="post" class="profile-form" id="profileForm">
                         {% csrf_token %}
                         <div class="field-grid two">
                             <label class="field">
@@ -162,5 +252,133 @@
             </section>
         </main>
     </div>
+
+    <!-- POPUP LỊCH SỬ FORM CHUẨN 2 CỘT MAX-WIDTH TO -->
+    <div id="historyModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center; backdrop-filter: blur(2px);">
+        <!-- Cho bảng rộng ra 850px để nhét vừa 2 cột -->
+        <div style="background: white; width: 95%; max-width: 850px; padding: 30px; border-radius: 16px; position: relative; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <!-- Nút X nhỏ đóng form ở góc -->
+            <button id="closeModalBtn" style="position: absolute; top: 15px; right: 15px; border: none; background: #f1f5f9; font-size: 18px; cursor: pointer; color: #64748b; width: 32px; height: 32px; border-radius: 50%; display: flex; justify-content: center; align-items: center; transition: 0.2s;">✕</button>
+
+            <!-- Cụm 2 cột chứa dữ liệu -->
+            <div id="modalDetails" style="display: flex; flex-wrap: wrap; gap: 24px;">
+                <!-- Dữ liệu JS sẽ được bơm vào đây -->
+            </div>
+            <input type="hidden" id="historyCsrfToken" value="{{ csrf_token }}">
+        </div>
+    </div>
+
+    <!-- TẤT CẢ JAVASCRIPT GOM VÀO 1 CỤC DUY NHẤT BÊN TRONG DOMContentLoaded -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+
+            // --- 1. RÀNG BUỘC SỐ ĐIỆN THOẠI & NGÀY SINH ---
+            const phoneInput = document.querySelector('input[name="phone"]');
+            if (phoneInput) {
+                phoneInput.setAttribute('maxlength', '10');
+                phoneInput.addEventListener('input', function(e) {
+                    this.value = this.value.replace(/[^0-9]/g, '');
+                });
+            }
+
+            const profileForm = document.getElementById('profileForm');
+            if (profileForm) {
+                profileForm.addEventListener('submit', function(e) {
+                    if (phoneInput && phoneInput.value.trim() !== '') {
+                        const phoneVal = phoneInput.value.trim();
+                        if (!/^0\d{9}$/.test(phoneVal)) {
+                            e.preventDefault();
+                            alert('Số điện thoại không hợp lệ! Vui lòng nhập đủ 10 số và bắt đầu bằng số 0.');
+                            phoneInput.focus();
+                            return;
+                        }
+                    }
+
+                    const dobInput = document.querySelector('input[name="birth_date"]');
+                    if (dobInput && dobInput.value) {
+                        const dob = new Date(dobInput.value);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (dob > today) {
+                            e.preventDefault();
+                            alert('Ngày sinh không hợp lệ! Bạn không thể chọn ngày ở tương lai.');
+                            dobInput.focus();
+                            return;
+                        }
+
+                        const minDate = new Date();
+                        minDate.setFullYear(today.getFullYear() - 100);
+                        if (dob < minDate) {
+                            e.preventDefault();
+                            alert('Ngày sinh không hợp lệ! Tuổi không được vượt quá 100.');
+                            dobInput.focus();
+                            return;
+                        }
+                    }
+                });
+            }
+
+            // --- 2. XỬ LÝ CLICK HIỆN POPUP LỊCH SỬ 2 CỘT ---
+            const historyArticles = document.querySelectorAll('.history-item');
+            const historyModal = document.getElementById('historyModal');
+
+            if (historyArticles.length > 0 && historyModal) {
+                const closeModalBtn = document.getElementById('closeModalBtn');
+                const modalDetails = document.getElementById('modalDetails');
+
+                historyArticles.forEach(article => {
+                    article.addEventListener('click', function() {
+                        // Lôi data từ các thuộc tính data-*
+                        const d = this.dataset;
+                        const csrfToken = document.getElementById('historyCsrfToken')?.value || '';
+                        const cancelAction = d.canCancel === 'true' && d.cancelUrl ? `
+                            <form method="post" action="${d.cancelUrl}" onsubmit="return confirm('Bạn chắc chắn muốn hủy lịch này?');" style="margin-top: 14px;">
+                                <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                                <button type="submit" style="border: 0; border-radius: 10px; padding: 11px 18px; background: #ef4444; color: #fff; font-weight: 700; cursor: pointer;">Hủy lịch</button>
+                            </form>
+                        ` : '';
+
+                        // Vẽ ra giao diện 2 box y chang ảnh xác nhận đặt lịch
+                        modalDetails.innerHTML = `
+                            <!-- Ô TRÁI: THÔNG TIN ĐẶT LỊCH -->
+                            <div style="flex: 1; min-width: 300px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 12px;">
+                                <h3 style="margin: 0 0 10px 0; font-size: 20px; color: #111827;">Thông tin đặt lịch</h3>
+                                <div style="font-size: 15px; color: #4b5563;">Dịch vụ: <strong style="color: #111827;">${d.service}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Gói dịch vụ: <strong style="color: #111827;">${d.package}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Số buổi: <strong style="color: #111827;">${d.sessions}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Ngày hẹn: <strong style="color: #111827;">${d.date}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Giờ hẹn: <strong style="color: #111827;">${d.time}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Chi phí: <strong style="color: #111827;">${d.price}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Trạng thái: <strong style="color: #ff4f86;">${d.status}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Mô tả gói: <strong style="color: #111827;">${d.desc}</strong></div>
+                                ${cancelAction}
+                            </div>
+
+                            <!-- Ô PHẢI: THÔNG TIN KHÁCH HÀNG -->
+                            <div style="flex: 1; min-width: 300px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 12px;">
+                                <h3 style="margin: 0 0 10px 0; font-size: 20px; color: #111827;">Thông tin khách hàng</h3>
+                                <div style="font-size: 15px; color: #4b5563;">Họ và tên: <strong style="color: #111827;">${d.cname}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Số điện thoại: <strong style="color: #111827;">${d.cphone}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Email: <strong style="color: #111827;">${d.cemail}</strong></div>
+
+                                <div style="margin-top: 10px; font-size: 15px; color: #4b5563;">Ghi chú</div>
+                                <textarea disabled style="width: 100%; height: 100px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; color: #6b7280; resize: none; font-family: inherit;">${d.cnotes}</textarea>
+                            </div>
+                        `;
+
+                        historyModal.style.display = 'flex'; // Bật Popup lên
+                    });
+                });
+
+                // Lệnh đóng form (bấm nút X hoặc bấm ra ngoài nền đen)
+                const closeModal = () => { historyModal.style.display = 'none'; };
+                closeModalBtn.addEventListener('click', closeModal);
+                historyModal.addEventListener('click', (e) => {
+                    if (e.target === historyModal) closeModal();
+                });
+            }
+        });
+    </script>
 </body>
 </html>

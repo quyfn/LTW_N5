@@ -1,7 +1,8 @@
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
 from django.contrib.auth.models import User
-from services.models import ChatRoom, Message
+from services.models import Booking, ChatRoom, Message
 
 
 class ChatConsumer(AsyncWebsocketConsumer):
@@ -69,3 +70,43 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'username': username,
             'timestamp': timestamp
         }))
+
+
+class BookingSlotsConsumer(AsyncWebsocketConsumer):
+    group_name = "booking_slots"
+
+    async def connect(self):
+        if not self.scope["user"].is_authenticated:
+            await self.close()
+            return
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive(self, text_data):
+        data = json.loads(text_data or "{}")
+        selected_date = data.get("date")
+        if not selected_date:
+            return
+        slots = await self.get_booked_slots(selected_date)
+        await self.send(text_data=json.dumps({
+            "type": "slots_update",
+            "date": selected_date,
+            "slots": slots,
+        }))
+
+    async def slots_update(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "slots_update",
+            "date": event["date"],
+            "slots": event["slots"],
+        }))
+
+    @database_sync_to_async
+    def get_booked_slots(self, selected_date):
+        return [
+            booking.booking_time.strftime("%H:%M")
+            for booking in Booking.objects.filter(booking_date=selected_date).exclude(status="Đã Hủy")
+        ]
