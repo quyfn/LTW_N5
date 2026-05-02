@@ -8,41 +8,9 @@
     <link rel="stylesheet" href="{% static 'css/service-dashboard.css' %}?v=6">
     <link rel="stylesheet" href="{% static 'css/dashboard-topnav-footer.css' %}?v=1">
 </head>
-<body class="admin-top-layout">
+<body>
     <div class="app-shell">
-        <header class="dashboard-header">
-            <a class="brand horizontal-brand" href="{% url 'service_dashboard' %}">
-                <h1>MAI TRÂM</h1>
-                <p>Beauty &amp; Spa</p>
-            </a>
-
-            <nav class="top-nav">
-                <a class="nav-item active" href="{% url 'service_dashboard' %}">
-                    <span>Dịch vụ</span>
-                </a>
-                <a class="nav-item" href="{% url 'appointment_dashboard' %}">
-                    <span>Lịch hẹn</span>
-                </a>
-                <a class="nav-item" href="{% url 'customer_dashboard' %}">
-                    <span>Khách hàng</span>
-                </a>
-                <div class="nav-dropdown">
-                    <button type="button" class="nav-item nav-dropdown-toggle" aria-expanded="false" data-nav-toggle>
-                        <span>Phản hồi</span>
-                        <span class="dropdown-caret" aria-hidden="true"></span>
-                    </button>
-                    <div class="nav-submenu" data-nav-submenu>
-                        <a class="nav-subitem" href="{% url 'consultation_dashboard' %}">Tư vấn</a>
-                    </div>
-                </div>
-            </nav>
-
-            <div class="manager-card manager-card-top">
-                <div class="manager-avatar"></div>
-                <span>{{ request.user.get_full_name|default:request.user.username }}</span>
-                <a class="nav-subitem" href="{% url 'user_logout' %}">Đăng xuất</a>
-            </div>
-        </header>
+        {% include 'includes/manager_nav.html' %}
 
         <main class="main-content">
             <header class="topbar">
@@ -319,7 +287,6 @@
         </div>
     </section>
 
-    <script src="{% static 'js/topnav-dropdown.js' %}?v=1"></script>
     <script src="{% static 'js/service-dashboard.js' %}?v=6"></script>
 </body>
 </html>

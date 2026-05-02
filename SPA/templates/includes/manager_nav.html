@@ -1,7 +1,7 @@
 {% with current=request.resolver_match.url_name %}
 <header class="manager-nav">
     <div class="manager-nav-track">
-        <a class="manager-logo" href="{% url 'service_dashboard' %}" aria-label="MAI TRAM Beauty and Spa">
+        <a class="manager-logo" href="{% url 'service_dashboard' %}" aria-label="MAI TRÂM Beauty and Spa">
             <span class="manager-logo-copy">
                 <strong>MAI TRÂM</strong>
                 <small>Beauty &amp; Spa</small>
@@ -18,7 +18,7 @@
             <a class="manager-nav-link{% if current == 'customer_dashboard' or current == 'customer_detail' %} is-active{% endif %}" href="{% url 'customer_dashboard' %}">
                 <span>Khách hàng</span>
             </a>
-            <details class="manager-menu-group{% if current == 'feedback_dashboard' or current == 'feedback_detail' or current == 'consultation_dashboard' or current == 'consultation_detail' %} is-active{% endif %}">
+            <details class="manager-menu-group{% if current == 'feedback_dashboard' or current == 'feedback_detail' or current == 'consultation_dashboard' or current == 'consultation_detail' %} is-active{% endif %}"{% if current == 'feedback_dashboard' or current == 'feedback_detail' or current == 'consultation_dashboard' or current == 'consultation_detail' %} open{% endif %}>
                 <summary class="manager-nav-link manager-nav-link--summary">
                     <span>Phản hồi</span>
                 </summary>
