@@ -1,16 +1,22 @@
-# This is a sample Python script.
+#!/usr/bin/env python
+"""Convenience entrypoint for running the Django app from the repo root."""
 
-# Press Ctrl+F5 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press F9 to toggle the breakpoint.
+import sys
+from pathlib import Path
 
 
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
+def main():
+    project_dir = Path(__file__).resolve().parent / "SPA"
+    sys.path.insert(0, str(project_dir))
+    import os
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "SPA.settings")
+
+    from django.core.management import execute_from_command_line
+
+    command = sys.argv[1:] or ["runserver", "127.0.0.1:8000"]
+    execute_from_command_line([str(project_dir / "manage.py"), *command])
+
+
+if __name__ == "__main__":
+    main()
