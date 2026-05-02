@@ -1,13 +1,58 @@
+
 from datetime import date, timedelta
+
+import random
+from datetime import date, datetime, timedelta
+
 
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth.models import User
+
 from .forms import CustomerProfileForm, LoginForm, RegisterForm
 from services.models import CustomerProfile, Service, ChatRoom, Message, Review
 import random
+from django.db import transaction
+from django.http import JsonResponse
+from django.urls import reverse
+from django.utils import timezone
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+from .forms import CustomerProfileForm, LoginForm, RegisterForm
+from services.models import Booking, CustomerProfile, Service, ChatRoom, Message, Review
+
+BOOKING_TIME_SLOTS = [f"{hour:02d}:00" for hour in range(8, 17)]
+
+
+def get_customer_booking_status(status):
+    if status == "Đang Xử Lý":
+        return "Đã đặt"
+    return status
+
+
+def sync_completed_bookings(user=None):
+    now = timezone.localtime()
+    queryset = Booking.objects.filter(status="Đang Xử Lý")
+    if user is not None and user.is_authenticated:
+        queryset = queryset.filter(customer=user)
+
+    for booking in queryset:
+        appointment_at = timezone.make_aware(
+            datetime.combine(booking.booking_date, booking.booking_time),
+            timezone.get_current_timezone(),
+        )
+        if now >= appointment_at + timedelta(hours=3):
+            booking.status = "Hoàn Thành"
+            booking.save(update_fields=["status"])
+
+
+def can_cancel_booking(booking):
+    if booking.status != "Đang Xử Lý":
+        return False
+    return timezone.now() <= booking.created_at + timedelta(hours=24)
+
 
 
 def redirect_by_role(request):
@@ -74,51 +119,62 @@ def serialize_service(service):
     }
 
 # ĐÃ CẬP NHẬT ĐỂ BƠM DATA CHO POPUP 2 CỘT BÊN HTML
-def build_customer_history():
-    return [
-        {
-            "date": "12/03/2026",
-            "time": "14:00",
-            "service": "Chăm sóc da mặt Collagen",
-            "package": "Gói tiêu chuẩn",
-            "sessions": "3-5 buổi",
-            "desc": "Hiệu quả rõ rệt sau 1 tháng",
-            "status": "Hoàn thành",
-            "price": "1.200.000đ",
-            "c_name": "Như Lê",
-            "c_phone": "0123456789",
-            "c_email": "aa1234@gmail.com",
-            "c_notes": "Da hơi nhạy cảm vùng má",
-        },
-        {
-            "date": "27/02/2026",
-            "time": "16:00",
-            "service": "Massage body thư giãn",
-            "package": "Gói VIP",
-            "sessions": "12-15 buổi",
-            "desc": "Trải nghiệm đẳng cấp 5 sao",
-            "status": "Hoàn thành",
-            "price": "500.000đ",
-            "c_name": "Như Lê",
-            "c_phone": "0123456789",
-            "c_email": "aa1234@gmail.com",
-            "c_notes": "Nhấn mạnh vai gáy",
-        },
-        {
-            "date": "08/02/2026",
-            "time": "09:00",
-            "service": "Trị mụn chuyên sâu",
-            "package": "Gói cơ bản",
-            "sessions": "1-2 buổi",
-            "desc": "Phù hợp cho lần đầu trải nghiệm",
-            "status": "Hoàn thành",
-            "price": "800.000đ",
-            "c_name": "Như Lê",
-            "c_phone": "0123456789",
-            "c_email": "aa1234@gmail.com",
-            "c_notes": "Không có ghi chú thêm",
-        },
-    ]
+def build_customer_history(user=None):
+    if user is None or not user.is_authenticated:
+        return []
+
+    sync_completed_bookings(user)
+    profile, _ = CustomerProfile.objects.get_or_create(user=user)
+
+    history = []
+    for booking in Booking.objects.filter(customer=user).select_related("service").order_by("-created_at"):
+        history.append(
+            {
+                "date": booking.booking_date.strftime("%d/%m/%Y"),
+                "time": booking.booking_time.strftime("%H:%M"),
+                "service": booking.service.name if booking.service else "Dịch vụ",
+                "package": booking.package_name,
+                "sessions": booking.sessions,
+                "desc": booking.package_description or "",
+                "status": get_customer_booking_status(booking.status),
+                "price": f"{format_service_price(booking.total_price)}đ",
+                "c_name": profile.display_name,
+                "c_phone": profile.phone or "Chưa cập nhật",
+                "c_email": user.email,
+                "c_notes": booking.notes or "Không có ghi chú thêm",
+            }
+        )
+
+    return history
+def build_customer_history(user=None):
+    if user is None or not user.is_authenticated:
+        return []
+
+    sync_completed_bookings(user)
+    profile, _ = CustomerProfile.objects.get_or_create(user=user)
+    history = []
+    for booking in Booking.objects.filter(customer=user).select_related("service").order_by("-created_at"):
+        history.append(
+            {
+                "date": booking.booking_date.strftime("%d/%m/%Y"),
+                "time": booking.booking_time.strftime("%H:%M"),
+                "service": booking.service.name if booking.service else "Dịch vụ",
+                "package": booking.package_name,
+                "sessions": booking.sessions,
+                "desc": booking.package_description or "",
+                "status": get_customer_booking_status(booking.status),
+                "raw_status": booking.status,
+                "booking_id": booking.id,
+                "can_cancel": can_cancel_booking(booking),
+                "cancel_url": reverse("cancel_booking", args=[booking.id]),
+                "price": f"{format_service_price(booking.total_price)}đ",
+                "c_name": profile.display_name,
+                "c_phone": profile.phone or "Chưa cập nhật",
+                "c_email": user.email,
+                "c_notes": booking.notes or "Không có ghi chú thêm",
+            }
+        )
+    return history
 
 
 def user_login(request):
@@ -1025,77 +1081,212 @@ def customer_account(request):
     context = {
         "form": form,
         "profile": profile,
-        "history_items": build_customer_history(),
+        "history_items": build_customer_history(request.user),
         "active_tab": request.GET.get("tab", "profile"),
         "member_since_label": profile.member_since.strftime("%m/%Y") if profile.member_since else "",
         "display_name": profile.display_name,
     }
     return render(request, "customer_account.html", context)
 
-
-def build_booking_calendar(days=14):
+def build_booking_calendar(days=31):
     today = date.today()
+    end_date = today + timedelta(days=days - 1)
+    first_day = today.replace(day=1)
+
     items = []
-    for offset in range(days):
-        current = today + timedelta(days=offset)
+    for _ in range(first_day.weekday()):
+        items.append({"blank": True})
+
+    current = first_day
+    while current <= end_date:
+        is_in_range = today <= current <= end_date
         items.append(
             {
+                "blank": False,
                 "day": current.day,
                 "iso": current.isoformat(),
-                "disabled": False,
-                "is_today": offset == 0,
+                "disabled": not is_in_range,
+                "is_today": current == today,
             }
         )
+        current += timedelta(days=1)
+
     return items
 
 
 @customer_required
 def booking_page(request):
     if request.method == "POST":
-        messages.success(request, "Đặt lịch thành công. Spa sẽ liên hệ xác nhận sớm.")
-        return redirect("booking")
+        service_id = request.POST.get("service_id")
+        booking_date_raw = request.POST.get("booking_date")
+        booking_time_raw = request.POST.get("booking_time")
 
+        try:
+            service = Service.objects.get(id=service_id, status=Service.STATUS_ACTIVE)
+            booking_date = datetime.strptime(booking_date_raw, "%Y-%m-%d").date()
+            booking_time = datetime.strptime(booking_time_raw, "%H:%M").time()
+        except Exception:
+            messages.error(request, "Thông tin đặt lịch không hợp lệ.")
+            return redirect("booking")
+
+        with transaction.atomic():
+            exists = Booking.objects.filter(
+                booking_date=booking_date,
+                booking_time=booking_time
+            ).exclude(status="Đã Hủy").exists()
+
+            if exists:
+                messages.error(request, "Khung giờ đã được đặt.")
+                return redirect("booking")
+
+            Booking.objects.create(
+                customer=request.user,
+                service=service,
+                booking_date=booking_date,
+                booking_time=booking_time,
+            )
+
+        messages.success(request, "Đặt lịch thành công.")
+        return redirect("/tai-khoan/?tab=history")
+
+    services = Service.objects.filter(status=Service.STATUS_ACTIVE)
+
+    return render(request, "booking.html", {
+        "services": services,
+        "calendar_days": build_booking_calendar(),
+    })
+@customer_required
+def cancel_booking(request, booking_id):
+    if request.method != "POST":
+        return redirect("/tai-khoan/?tab=history")
+
+    sync_completed_bookings(request.user)
+    booking = get_object_or_404(Booking, id=booking_id, customer=request.user)
+    if not can_cancel_booking(booking):
+        messages.error(request, "Lịch này đã quá thời hạn hủy hoặc không thể hủy.")
+        return redirect("/tai-khoan/?tab=history")
+
+    booking.status = "Đã Hủy"
+    booking.save(update_fields=["status"])
+
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        "booking_slots",
+        {
+            "type": "slots_update",
+            "date": booking.booking_date.isoformat(),
+            "slots": get_booked_slots_for_date(booking.booking_date),
+        },
+    )
+    messages.success(request, "Đã hủy lịch đặt.")
+    return redirect("/tai-khoan/?tab=history")
+
+
+def build_booking_calendar(days=31):
+    today = date.today()
+    end_date = today + timedelta(days=days - 1)
+    first_day = today.replace(day=1)
+    items = []
+    for _ in range(first_day.weekday()):
+        items.append({"blank": True})
+
+    current = first_day
+    while current <= end_date:
+        is_in_range = today <= current <= end_date
+        items.append(
+            {
+                "blank": False,
+                "day": current.day,
+                "iso": current.isoformat(),
+                "disabled": not is_in_range,
+                "is_today": current == today,
+            }
+        )
+        current += timedelta(days=1)
+    return items
+
+
+def get_booked_slots_for_date(selected_date):
+    return sorted({
+        booking.booking_time.strftime("%H:%M")
+        for booking in Booking.objects.filter(booking_date=selected_date).exclude(status="Đã Hủy")
+    })
+
+
+@customer_required
+def booking_page(request):
+    if request.method == "POST":
+        service_id = request.POST.get("service_id")
+        booking_date_raw = request.POST.get("booking_date")
+        booking_time_raw = request.POST.get("booking_time")
+        package_name = request.POST.get("package_name", "").strip()
+        sessions = request.POST.get("sessions", "").strip()
+        package_description = request.POST.get("package_description", "").strip()
+        total_price_raw = request.POST.get("total_price", "0")
+        notes = request.POST.get("notes", "").strip()
+
+        try:
+            service = Service.objects.get(id=service_id, status=Service.STATUS_ACTIVE)
+            booking_date = datetime.strptime(booking_date_raw, "%Y-%m-%d").date()
+            booking_time = datetime.strptime(booking_time_raw, "%H:%M").time()
+            today = date.today()
+            if booking_date < today or booking_date > today + timedelta(days=30):
+                raise ValueError
+            if booking_time.strftime("%H:%M") not in BOOKING_TIME_SLOTS:
+                raise ValueError
+            total_price = int("".join(ch for ch in total_price_raw if ch.isdigit()) or service.price)
+        except (Service.DoesNotExist, TypeError, ValueError):
+            messages.error(request, "Thông tin đặt lịch chưa hợp lệ. Vui lòng kiểm tra lại.")
+            return redirect("booking")
+
+        with transaction.atomic():
+            is_taken = Booking.objects.select_for_update().filter(
+                booking_date=booking_date,
+                booking_time=booking_time,
+            ).exclude(status="Đã Hủy").exists()
+            if is_taken:
+                messages.error(request, "Khung giờ này vừa được đặt. Vui lòng chọn khung giờ khác.")
+                return redirect("booking")
+
+            Booking.objects.create(
+                customer=request.user,
+                service=service,
+                package_name=package_name,
+                sessions=sessions,
+                package_description=package_description,
+                booking_date=booking_date,
+                booking_time=booking_time,
+                total_price=total_price,
+                notes=notes,
+            )
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                "booking_slots",
+                {
+                    "type": "slots_update",
+                    "date": booking_date.isoformat(),
+                    "slots": get_booked_slots_for_date(booking_date),
+                },
+            )
+        messages.success(request, "Đặt lịch thành công.")
+        return redirect("/tai-khoan/?tab=history")
+
+    db_services = Service.objects.filter(status=Service.STATUS_ACTIVE)
     services = [
         {
-            "id": 1,
-            "name": "Chăm sóc da mặt Collagen",
-            "description": "Làm sạch sâu, dưỡng ẩm và tái tạo da",
-            "duration": "60 phút",
-            "rating": "4.9",
-            "price": "1.200.000đ",
-            "tone": "peach",
-            "image_url": "https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=900&q=80",
-        },
-        {
-            "id": 2,
-            "name": "Trị mụn chuyên sâu",
-            "description": "Điều trị mụn an toàn, hiệu quả",
-            "duration": "60 phút",
-            "rating": "4.8",
-            "price": "800.000đ",
-            "tone": "rose",
-            "image_url": "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?auto=format&fit=crop&w=900&q=80",
-        },
-        {
-            "id": 3,
-            "name": "Massage body thư giãn",
-            "description": "Massage toàn thân thông cơ và giảm căng thẳng",
-            "duration": "60 phút",
-            "rating": "4.8",
-            "price": "500.000đ",
-            "tone": "sea",
-            "image_url": "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?auto=format&fit=crop&w=900&q=80",
-        },
-        {
-            "id": 4,
-            "name": "Triệt lông vĩnh viễn bằng laser IPL",
-            "description": "Công nghệ triệt lông hiện đại và an toàn",
-            "duration": "90 phút",
-            "rating": "4.7",
-            "price": "2.000.000đ",
-            "tone": "mint",
-            "image_url": "https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?auto=format&fit=crop&w=900&q=80",
-        },
+            "id": service.id,
+            "name": service.name,
+            "description": service.short_description,
+            "duration": f"{service.duration_minutes} phút",
+            "rating": service.rating,
+            "price": f"{format_service_price(service.price)}đ",
+            "raw_price": service.price,
+            "tone": service.category,
+            "category": service.category,
+            "image_url": service.image_url or "/static/images/service-fallback.svg",
+        }
+        for service in db_services
+
     ]
 
     package_catalog = [
@@ -1104,6 +1295,7 @@ def booking_page(request):
             "name": "Gói cơ bản",
             "sessions": "1-2",
             "price": "Từ 800.000đ",
+            "multiplier": 1,
             "result": "Phù hợp cho lần đầu trải nghiệm",
             "benefits": [
                 "Làm sạch cơ bản",
@@ -1117,6 +1309,7 @@ def booking_page(request):
             "name": "Gói tiêu chuẩn",
             "sessions": "3-5",
             "price": "Từ 1.300.000đ",
+            "multiplier": 1.35,
             "result": "Hiệu quả rõ rệt sau 1 tháng",
             "benefits": [
                 "Tất cả quyền lợi gói cơ bản",
@@ -1130,6 +1323,7 @@ def booking_page(request):
             "name": "Gói cao cấp",
             "sessions": "8-10",
             "price": "Từ 2.500.000đ",
+            "multiplier": 2.1,
             "result": "Chăm sóc toàn diện, hiệu quả lâu dài",
             "benefits": [
                 "Tất cả quyền lợi gói tiêu chuẩn",
@@ -1143,6 +1337,7 @@ def booking_page(request):
             "name": "Gói VIP",
             "sessions": "12-15",
             "price": "Từ 3.500.000đ",
+            "multiplier": 3,
             "result": "Trải nghiệm đẳng cấp 5 sao",
             "benefits": [
                 "Tất cả quyền lợi gói cao cấp",
@@ -1154,13 +1349,31 @@ def booking_page(request):
         },
     ]
 
-    packages_by_service = {
-        str(service["id"]): [dict(item) for item in package_catalog]
-        for service in services
-    }
-    today_iso = date.today().isoformat()
+    packages_by_service = {}
+    for service in services:
+        packages = []
+        for item in package_catalog:
+            package = dict(item)
+            price = int(service["raw_price"] * package.pop("multiplier"))
+            package["price"] = f"{format_service_price(price)}đ"
+            package["price_value"] = price
+            package["benefits"] = [
+                text.replace("dịch vụ", service["name"].lower()) for text in package["benefits"]
+            ]
+            packages.append(package)
+        packages_by_service[str(service["id"])] = packages
+
+    booked_slots = Booking.objects.filter(
+        booking_date__gte=date.today(),
+        booking_date__lte=date.today() + timedelta(days=30),
+    ).exclude(status="Đã Hủy")
+    time_slots_by_date = {}
+    for booking in booked_slots:
+        day_key = booking.booking_date.isoformat()
+        time_slots_by_date.setdefault(day_key, set()).add(booking.booking_time.strftime("%H:%M"))
     time_slots_by_date = {
-        today_iso: ["09:00", "10:30", "14:00", "16:00"],
+        day_key: sorted(slots)
+        for day_key, slots in time_slots_by_date.items()
     }
     profile, _ = CustomerProfile.objects.get_or_create(user=request.user)
 
@@ -1168,6 +1381,7 @@ def booking_page(request):
         "services": services,
         "packages_by_service": packages_by_service,
         "time_slots_by_date": time_slots_by_date,
+        "booking_time_slots": BOOKING_TIME_SLOTS,
         "calendar_days": build_booking_calendar(),
         "current_month_label": date.today().strftime("%m/%Y"),
         "customer_info": {
@@ -1176,9 +1390,24 @@ def booking_page(request):
             "email": request.user.email,
         },
         "history": build_customer_history(),
+        "history": build_customer_history(request.user),
     }
     return render(request, "booking.html", context)
 
+
+@customer_required
+def booking_slots(request):
+    day = request.GET.get("date", "")
+    try:
+        selected_date = datetime.strptime(day, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return JsonResponse({"booked_slots": [], "slots": BOOKING_TIME_SLOTS}, status=400)
+
+    today = date.today()
+    if selected_date < today or selected_date > today + timedelta(days=30):
+        return JsonResponse({"booked_slots": [], "slots": BOOKING_TIME_SLOTS}, status=400)
+
+    return JsonResponse({"booked_slots": get_booked_slots_for_date(selected_date), "slots": BOOKING_TIME_SLOTS})
 
 def see_service(request):
     services = [
@@ -1312,3 +1541,4 @@ def public_review_page(request):
         "star_1_count": stars[1], "star_1_percent": get_percent(stars[1]),
     }
     return render(request, "public_reviews.html", context)
+

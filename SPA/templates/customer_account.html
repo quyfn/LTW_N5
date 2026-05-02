@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý tài khoản | Mai Trâm Spa</title>
-    <link rel="stylesheet" href="{% static 'css/customer-account.css' %}?v=2">
+    <link rel="stylesheet" href="{% static 'css/customer-account.css' %}?v=3">
 
     <!-- CSS CHUẨN MENU NẰM NGANG KIỂU VIÊN THUỐC (PILL) -->
     <style>
@@ -145,6 +145,9 @@
                             data-date="{{ item.date|default:'' }}"
                             data-time="{{ item.time|default:'' }}"
                             data-price="{{ item.price|default:'' }}"
+                            data-status="{{ item.status|default:'' }}"
+                            data-can-cancel="{{ item.can_cancel|yesno:'true,false' }}"
+                            data-cancel-url="{{ item.cancel_url|default:'' }}"
                             data-desc="{{ item.desc|default:'' }}"
                             data-cname="{{ item.c_name|default:'' }}"
                             data-cphone="{{ item.c_phone|default:'' }}"
@@ -261,6 +264,7 @@
             <div id="modalDetails" style="display: flex; flex-wrap: wrap; gap: 24px;">
                 <!-- Dữ liệu JS sẽ được bơm vào đây -->
             </div>
+            <input type="hidden" id="historyCsrfToken" value="{{ csrf_token }}">
         </div>
     </div>
 
@@ -327,6 +331,13 @@
                     article.addEventListener('click', function() {
                         // Lôi data từ các thuộc tính data-*
                         const d = this.dataset;
+                        const csrfToken = document.getElementById('historyCsrfToken')?.value || '';
+                        const cancelAction = d.canCancel === 'true' && d.cancelUrl ? `
+                            <form method="post" action="${d.cancelUrl}" onsubmit="return confirm('Bạn chắc chắn muốn hủy lịch này?');" style="margin-top: 14px;">
+                                <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                                <button type="submit" style="border: 0; border-radius: 10px; padding: 11px 18px; background: #ef4444; color: #fff; font-weight: 700; cursor: pointer;">Hủy lịch</button>
+                            </form>
+                        ` : '';
 
                         // Vẽ ra giao diện 2 box y chang ảnh xác nhận đặt lịch
                         modalDetails.innerHTML = `
@@ -339,7 +350,9 @@
                                 <div style="font-size: 15px; color: #4b5563;">Ngày hẹn: <strong style="color: #111827;">${d.date}</strong></div>
                                 <div style="font-size: 15px; color: #4b5563;">Giờ hẹn: <strong style="color: #111827;">${d.time}</strong></div>
                                 <div style="font-size: 15px; color: #4b5563;">Chi phí: <strong style="color: #111827;">${d.price}</strong></div>
+                                <div style="font-size: 15px; color: #4b5563;">Trạng thái: <strong style="color: #ff4f86;">${d.status}</strong></div>
                                 <div style="font-size: 15px; color: #4b5563;">Mô tả gói: <strong style="color: #111827;">${d.desc}</strong></div>
+                                ${cancelAction}
                             </div>
 
                             <!-- Ô PHẢI: THÔNG TIN KHÁCH HÀNG -->

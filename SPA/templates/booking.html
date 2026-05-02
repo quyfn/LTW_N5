@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đặt lịch hẹn | Mai Trâm Beauty &amp; Spa</title>
-    <link rel="stylesheet" href="{% static 'css/booking.css' %}?v=4">
+    <link rel="stylesheet" href="{% static 'css/booking.css' %}?v=7">
 </head>
 <body>
     {% include 'includes/customer_navbar.html' %}
@@ -15,7 +15,6 @@
             <section class="booking-board">
                 <div class="booking-board__tabs">
                     <button class="booking-board__tab is-active" type="button" data-panel-target="booking-flow">Đặt lịch dịch vụ</button>
-                    <button class="booking-board__tab" type="button" data-panel-target="booking-history">Lịch đặt của tôi</button>
                 </div>
 
                 {% if messages %}
@@ -49,7 +48,27 @@
                     <div class="booking-divider"></div>
 
                     <section class="booking-step is-active" data-step="1">
-                        <div class="service-grid">
+                        <div class="filter-bar">
+                            <div class="search-box">
+                                <span class="search-icon" aria-hidden="true"></span>
+                                <input type="search" id="search-service" placeholder="Tìm dịch vụ bạn muốn">
+                            </div>
+                            <div class="filter-actions">
+                                <button class="filter-chip active" type="button" data-category="all">Tất cả</button>
+                                <button class="filter-chip" type="button" data-category="face">Da mặt</button>
+                                <button class="filter-chip" type="button" data-category="body">Body</button>
+                                <button class="filter-chip" type="button" data-category="hair">Triệt lông</button>
+                                <label class="price-select">
+                                    <span>Giá</span>
+                                    <select id="priceSort-service" aria-label="Sắp xếp theo giá">
+                                        <option value="default">Mặc định</option>
+                                        <option value="asc">Thấp đến cao</option>
+                                        <option value="desc">Cao đến thấp</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="service-grid" id="serviceGrid">
                             {% for service in services %}
                             <button
                                 class="service-card"
@@ -59,7 +78,8 @@
                                 data-service-name="{{ service.name }}"
                                 data-service-description="{{ service.description }}"
                                 data-service-duration="{{ service.duration }}"
-                                data-service-price="{{ service.price }}"
+                                data-service-price="{{ service.raw_price }}"
+                                data-category="{{ service.category }}"
                             >
                                 <span class="service-card__media tone-{{ service.tone }}">
                                     <img src="{{ service.image_url }}" alt="{{ service.name }}">
@@ -76,6 +96,7 @@
                             </button>
                             {% endfor %}
                         </div>
+                        <div class="empty-state hidden" id="emptyStateService"></div>
                     </section>
 
                     <section class="booking-step" data-step="2">
@@ -88,9 +109,9 @@
                                 <h2 class="panel-title">Chọn ngày</h2>
                                 <div class="calendar-shell">
                                     <div class="calendar-head">
-                                        <button type="button" class="calendar-arrow" aria-label="Tháng trước">‹</button>
+                                        <button type="button" class="calendar-arrow" aria-label="Tháng trước" disabled>‹</button>
                                         <strong>{{ current_month_label }}</strong>
-                                        <button type="button" class="calendar-arrow" aria-label="Tháng sau">›</button>
+                                        <button type="button" class="calendar-arrow" aria-label="Tháng sau" disabled>›</button>
                                     </div>
                                     <div class="calendar-weekdays">
                                         <span>T2</span>
@@ -103,6 +124,9 @@
                                     </div>
                                     <div class="calendar-grid">
                                         {% for day in calendar_days %}
+                                        {% if day.blank %}
+                                        <span class="calendar-day calendar-day--blank" aria-hidden="true"></span>
+                                        {% else %}
                                         <button
                                             class="calendar-day{% if day.disabled %} is-disabled{% endif %}{% if day.is_today %} is-today{% endif %}"
                                             type="button"
@@ -112,6 +136,7 @@
                                         >
                                             {{ day.day }}
                                         </button>
+                                        {% endif %}
                                         {% endfor %}
                                     </div>
                                 </div>
@@ -149,7 +174,7 @@
                                     <p><span>Email:</span> <strong>{{ customer_info.email }}</strong></p>
                                     <label class="note-field">
                                         <span>Ghi chú</span>
-                                        <textarea rows="5" placeholder="Ghi chú thêm (nếu có)"></textarea>
+                                        <textarea id="customer-note" rows="5" placeholder="Ghi chú thêm (nếu có)"></textarea>
                                     </label>
                                 </div>
                             </article>
@@ -162,29 +187,14 @@
                     </div>
                 </div>
 
-                <div class="booking-panel" id="booking-history">
-                    <div class="history-grid">
-                        {% for item in history %}
-                        <article class="history-card">
-                            <h3>{{ item.service }}</h3>
-                            <p>{{ item.schedule }}</p>
-                            <span>{{ item.status }}</span>
-                        </article>
-                        {% empty %}
-                        <article class="history-card history-card--empty">
-                            <h3>Chưa có lịch nào</h3>
-                            <p>Lịch đã đặt của bạn sẽ hiển thị tại đây.</p>
-                        </article>
-                        {% endfor %}
-                    </div>
-                </div>
+                <!-- Đã xóa panel lịch sử đặt lịch để chỉ giữ lại luồng đặt lịch mới -->
             </section>
         </main>
 
         <footer class="footer">
             <section class="footer-col intro">
                 <h3>Mai Trâm Spa</h3>
-                <p>Noi ve dep thang hoa voi cac lieu trinh cham soc da, body va triet long theo quy trinh chuyen nghiep.</p>
+                <p>Nơi vẻ đẹp thăng hoa với các liệu trình chăm sóc da, body và triệt lông theo quy trình chuyên nghiệp.</p>
                 <div class="socials">
                     <a href="#" aria-label="Facebook">f</a>
                     <a href="#" aria-label="Instagram">ig</a>
@@ -193,42 +203,48 @@
             </section>
 
             <section class="footer-col">
-                <h3>Dich vu</h3>
-                <p>Cham soc da mat</p>
+                <h3>Dịch vụ</h3>
+                <p>Chăm sóc da mặt</p>
                 <p>Massage body</p>
-                <p>Triet long</p>
-                <p>Dieu tri mun</p>
-                <p>Xong hoi</p>
+                <p>Triệt lông</p>
+                <p>Điều trị mụn</p>
+                <p>Xông hơi</p>
             </section>
 
             <section class="footer-col">
-                <h3>Ve chung toi</h3>
-                <p>Gioi thieu</p>
-                <p>Doi ngu</p>
-                <p>Tin tuc</p>
-                <p>Lien he</p>
-                <p>Tuyen dung</p>
+                <h3>Về chúng tôi</h3>
+                <p>Giới thiệu</p>
+                <p>Đội ngũ</p>
+                <p>Tin tức</p>
+                <p>Liên hệ</p>
+                <p>Tuyển dụng</p>
             </section>
 
             <section class="footer-col">
-                <h3>Lien he</h3>
-                <p>104/7 Le Dinh Ly, Thanh Khe, Da Nang</p>
+                <h3>Liên hệ</h3>
+                <p>104/7 Lê Đình Lý, Thanh Khê, Đà Nẵng</p>
                 <p>0901 234 589</p>
                 <p>info@maitram.spa</p>
             </section>
         </footer>
     </div>
 
-    <form id="booking-submit-form" method="post" action="{% url 'booking' %}" hidden>
-        {% csrf_token %}
-        <input type="hidden" name="service_id" id="booking-service-id">
-        <input type="hidden" name="package_id" id="booking-package-id">
-        <input type="hidden" name="appointment_date" id="booking-appointment-date">
-        <input type="hidden" name="appointment_time" id="booking-appointment-time">
-    </form>
+    <!-- FORM ẨN ĐỂ GỬI DỮ LIỆU THẬT VỀ BACKEND -->
+<form id="booking-submit-form" method="post" action="{% url 'booking' %}" hidden>
+    {% csrf_token %}
+    <input type="hidden" name="service_id" id="booking-service-id">
+    <input type="hidden" name="package_name" id="booking-package-name">
+    <input type="hidden" name="sessions" id="booking-sessions">
+    <input type="hidden" name="package_description" id="booking-package-desc">
+    <input type="hidden" name="booking_date" id="booking-appointment-date">
+    <input type="hidden" name="booking_time" id="booking-appointment-time">
+    <input type="hidden" name="total_price" id="booking-total-price">
+    <input type="hidden" name="notes" id="booking-notes">
+</form>
 
     {{ packages_by_service|json_script:"booking-packages-data" }}
     {{ time_slots_by_date|json_script:"booking-slots-data" }}
-    <script src="{% static 'js/booking.js' %}?v=4"></script>
+    {{ booking_time_slots|json_script:"booking-time-slots-data" }}
+    <script src="{% static 'js/booking.js' %}?v=7"></script>
 </body>
 </html>
