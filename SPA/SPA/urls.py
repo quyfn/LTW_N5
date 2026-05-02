@@ -34,6 +34,7 @@ urlpatterns = [
     path('logout/', user_logout, name='user_logout'),
     path('quan-ly/dich-vu/', service_dashboard, name='service_dashboard'),
     path('quan-ly/lich-hen/', appointment_dashboard, name='appointment_dashboard'),
+    path('quan-ly/lich-hen/<int:booking_id>/cap-nhat-trang-thai/', views.api_update_booking_status, name='api_update_booking_status'),
     path('quan-ly/phan-hoi/', feedback_dashboard, name='feedback_dashboard'),
     path('quan-ly/phan-hoi/tu-van/', consultation_dashboard, name='consultation_dashboard'),
     path('quan-ly/phan-hoi/tu-van/<int:conversation_id>/', consultation_detail, name='consultation_detail'),

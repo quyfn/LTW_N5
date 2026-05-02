@@ -54,6 +54,89 @@ document.addEventListener("DOMContentLoaded", function () {
         return document.querySelector('[name=csrfmiddlewaretoken]')?.value || "";
     }
 
+    const appointmentRows = document.querySelectorAll("[data-appointment-item]");
+    const appointmentStatusSelect = document.querySelector("[data-status-select]");
+    const appointmentUpdateButton = document.querySelector("[data-update-status]");
+    let currentAppointmentRow = null;
+
+    function setText(selector, value) {
+        const target = document.querySelector(selector);
+        if (target) target.textContent = value || "";
+    }
+
+    function setStatusPill(target, label, className) {
+        if (!target) return;
+        target.textContent = label || "";
+        target.className = `status-pill ${className || ""}`.trim();
+    }
+
+    appointmentRows.forEach(row => {
+        row.addEventListener("click", () => {
+            const data = row.dataset;
+            currentAppointmentRow = row;
+
+            setText("[data-detail-customer]", data.customer);
+            setText("[data-detail-phone]", data.phone);
+            setText("[data-detail-email]", data.email);
+            setText("[data-detail-birth-date]", data.birthDate);
+            setText("[data-detail-address]", data.address);
+            setText("[data-detail-service]", data.service);
+            setText("[data-detail-package]", data.package);
+            setText("[data-detail-sessions]", data.sessions);
+            setText("[data-detail-date]", data.date);
+            setText("[data-detail-time]", data.time);
+            setText("[data-detail-price]", data.price);
+            setText("[data-detail-package-description]", data.packageDescription);
+            setText("[data-detail-note]", data.note);
+            setText("[data-detail-customer-notes]", data.customerNotes);
+            setStatusPill(document.querySelector("[data-detail-status]"), data.status, data.statusClass);
+
+            if (appointmentStatusSelect) {
+                appointmentStatusSelect.value = data.rawStatus || "";
+            }
+
+            openModal("appointment-detail-modal");
+        });
+    });
+
+    if (appointmentUpdateButton) {
+        appointmentUpdateButton.addEventListener("click", async () => {
+            if (!currentAppointmentRow || !appointmentStatusSelect) return;
+
+            const formData = new FormData();
+            formData.append("status", appointmentStatusSelect.value);
+
+            try {
+                const res = await fetch(currentAppointmentRow.dataset.updateUrl, {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": document.querySelector("[data-appointment-csrf]")?.value || getCsrfToken(),
+                    },
+                    body: formData,
+                });
+                const data = await res.json();
+
+                if (!res.ok || data.status !== "success") {
+                    alert(data.message || "Không thể cập nhật trạng thái.");
+                    return;
+                }
+
+                currentAppointmentRow.dataset.rawStatus = data.booking_status;
+                currentAppointmentRow.dataset.status = data.status_label;
+                currentAppointmentRow.dataset.statusClass = data.status_class;
+
+                const rowPill = currentAppointmentRow.querySelector(".status-pill");
+                setStatusPill(rowPill, data.status_label, data.status_class);
+                setStatusPill(document.querySelector("[data-detail-status]"), data.status_label, data.status_class);
+
+                closeAllModals();
+            } catch (err) {
+                console.error("Lỗi cập nhật trạng thái lịch hẹn:", err);
+                alert("Thao tác thất bại.");
+            }
+        });
+    }
+
     // CALL API THẬT
     document.querySelectorAll("form[data-form-type]").forEach(form => {
         form.addEventListener('submit', async (e) => {

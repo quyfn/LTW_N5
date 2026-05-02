@@ -1,6 +1,4 @@
-
-from datetime import date, timedelta
-
+import json
 import random
 import uuid
 from datetime import date, datetime, timedelta
@@ -12,21 +10,18 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth.models import User
+from django.db.models import Count, Avg
 from services.models import Service, Booking, CustomerProfile, ChatRoom, Message, Review
 
 from .forms import CustomerProfileForm, LoginForm, RegisterForm
-import random
-from django.db import transaction
+from django.db import models, transaction
 from django.http import JsonResponse
 from django.urls import reverse
 from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from .forms import CustomerProfileForm, LoginForm, RegisterForm
 
-from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.shortcuts import get_object_or_404
 
 BOOKING_TIME_SLOTS = [f"{hour:02d}:00" for hour in range(8, 17)]
 
@@ -121,6 +116,120 @@ def serialize_service(service):
         "rating": service.rating,
         "image_url": service.image_url,
         "status": service.get_status_display(),
+    }
+
+
+MANAGER_STATUS_META = {
+    "Đang Xử Lý": ("Đang tiến hành", "green"),
+    "Hoàn Thành": ("Hoàn thành", "blue"),
+    "Đã Hủy": ("Đã hủy", "red"),
+}
+
+
+def get_manager_status_choices():
+    return [
+        {"value": "Đang Xử Lý", "label": "Đang tiến hành"},
+        {"value": "Hoàn Thành", "label": "Hoàn thành"},
+        {"value": "Đã Hủy", "label": "Đã hủy"},
+    ]
+
+
+def get_manager_status_meta(status):
+    return MANAGER_STATUS_META.get(status, (status, "green"))
+
+
+def build_manager_appointment_item(booking):
+    profile = getattr(booking.customer, "customer_profile", None)
+    customer_name = profile.display_name if profile else (
+        f"{booking.customer.last_name} {booking.customer.first_name}".strip() or booking.customer.username
+    )
+    phone = profile.phone if profile and profile.phone else "Chưa cập nhật"
+    birth_date = profile.birth_date.strftime("%d/%m/%Y") if profile and profile.birth_date else "Chưa cập nhật"
+    address = profile.address if profile and profile.address else "Chưa cập nhật"
+    customer_notes = profile.notes if profile and profile.notes else "Không có ghi chú"
+    status_label, status_class = get_manager_status_meta(booking.status)
+
+    return {
+        "id": booking.id,
+        "customer": customer_name,
+        "phone": phone,
+        "email": booking.customer.email or "Chưa cập nhật",
+        "birth_date": birth_date,
+        "address": address,
+        "service": booking.service.name if booking.service else "Dịch vụ",
+        "package": booking.package_name,
+        "sessions": booking.sessions,
+        "package_description": booking.package_description or "Không có mô tả gói",
+        "date": booking.booking_date.strftime("%d/%m/%Y"),
+        "time": booking.booking_time.strftime("%H:%M"),
+        "price": f"{format_service_price(booking.total_price)}đ",
+        "status": status_label,
+        "raw_status": booking.status,
+        "status_class": status_class,
+        "note": booking.notes or "Không có ghi chú đặt lịch",
+        "customer_notes": customer_notes,
+        "update_url": reverse("api_update_booking_status", args=[booking.id]),
+    }
+
+
+def calculate_booking_points(user):
+    completed_total = Booking.objects.filter(customer=user, status="Hoàn Thành").aggregate(
+        total=models.Sum("total_price")
+    )["total"] or 0
+    return completed_total // 10000
+
+
+def sync_customer_points(user):
+    profile, _ = CustomerProfile.objects.get_or_create(
+        user=user,
+        defaults={
+            "full_name": f"{user.last_name} {user.first_name}".strip() or user.username,
+            "member_since": user.date_joined.date(),
+        },
+    )
+    earned_points = calculate_booking_points(user)
+    if earned_points > profile.loyalty_points:
+        profile.loyalty_points = earned_points
+        profile.save(update_fields=["loyalty_points"])
+    return profile
+
+
+def build_manager_customer_history(user):
+    sync_completed_bookings(user)
+    history = []
+    for booking in Booking.objects.filter(customer=user).select_related("service").order_by("-booking_date", "-booking_time"):
+        status_label, _ = get_manager_status_meta(booking.status)
+        history.append({
+            "date": booking.booking_date.strftime("%d/%m/%Y"),
+            "service": booking.service.name if booking.service else "Dịch vụ",
+            "status": status_label,
+            "price": f"{format_service_price(booking.total_price)}đ",
+        })
+    return history
+
+
+def build_manager_customer_item(user):
+    profile = sync_customer_points(user)
+    history = build_manager_customer_history(user)
+    today = date.today()
+    age = "Chưa cập nhật"
+    if profile.birth_date:
+        age = today.year - profile.birth_date.year - (
+            (today.month, today.day) < (profile.birth_date.month, profile.birth_date.day)
+        )
+    name = profile.display_name
+    return {
+        "id": user.id,
+        "name": name,
+        "gender": "Chưa cập nhật",
+        "age": age,
+        "phone": profile.phone or "Chưa cập nhật",
+        "points": f"{profile.loyalty_points} điểm",
+        "raw_points": profile.loyalty_points,
+        "email": user.email or "Chưa cập nhật",
+        "address": profile.address or "Chưa cập nhật",
+        "history": history,
+        "history_json": json.dumps(history, ensure_ascii=False),
     }
 
 # ĐÃ CẬP NHẬT ĐỂ BƠM DATA CHO POPUP 2 CỘT BÊN HTML
@@ -261,172 +370,11 @@ def service_dashboard(request):
 
 @manager_required
 def appointment_dashboard(request):
+    sync_completed_bookings()
     appointments = [
-        {
-            "id": 1,
-            "customer": "Nguyễn Thị Trà My",
-            "phone": "0901234567",
-            "service": "Trị mụn chuyên sâu",
-            "date": "25/02/2026",
-            "time": "16:00",
-            "status": "Đang Tiến Hành",
-            "status_class": "green",
-            "note": "Khách yêu cầu phòng riêng",
-        },
-        {
-            "id": 2,
-            "customer": "Phạm Thị Hoài",
-            "phone": "0905050323",
-            "service": "Triệt lông công nghệ Diode",
-            "date": "10/02/2026",
-            "time": "9:00",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Đã hoàn tất liệu trình theo lịch đặt",
-        },
-        {
-            "id": 3,
-            "customer": "Võ Bích Hợp",
-            "phone": "0328775385",
-            "service": "Gội đầu dưỡng sinh",
-            "date": "10/02/2026",
-            "time": "13:00",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Khách thanh toán tại quầy",
-        },
-        {
-            "id": 4,
-            "customer": "Nguyễn Thị Hoa",
-            "phone": "0384726564",
-            "service": "Post-Acne Recovery Therapy",
-            "date": "11/02/2026",
-            "time": "9:00",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Khách đặt lại lịch tái khám",
-        },
-        {
-            "id": 5,
-            "customer": "Lê Thị Bé Như",
-            "phone": "0376258537",
-            "service": "Acne Detox Therapy",
-            "date": "11/02/2026",
-            "time": "13:00",
-            "status": "Đã Hủy",
-            "status_class": "red",
-            "note": "Khách báo hủy trước 2 giờ",
-        },
-        {
-            "id": 6,
-            "customer": "Nguyễn Cao Sang",
-            "phone": "0387642458",
-            "service": "Acne Detox Therapy",
-            "date": "12/02/2026",
-            "time": "13:00",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Khách yêu cầu xuất hóa đơn",
-        },
-        {
-            "id": 7,
-            "customer": "Đoàn Thanh Nhã",
-            "phone": "0927462684",
-            "service": "Post-Acne Recovery Therapy",
-            "date": "9/02/2026",
-            "time": "7:00",
-            "status": "Đã Hủy",
-            "status_class": "red",
-            "note": "Khách đến trễ nên lịch bị hủy",
-        },
-        {
-            "id": 8,
-            "customer": "Trần Thị Yến",
-            "phone": "0912345678",
-            "service": "Chăm sóc da mặt cao cấp",
-            "date": "15/02/2026",
-            "time": "10:00",
-            "status": "Đang Tiến Hành",
-            "status_class": "green",
-            "note": "Khách sử dụng voucher giảm 20%",
-        },
-        {
-            "id": 9,
-            "customer": "Lương Thị Nhà",
-            "phone": "0923456789",
-            "service": "Massage body thư giãn",
-            "date": "14/02/2026",
-            "time": "14:30",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Khách thanh toán bằng thẻ",
-        },
-        {
-            "id": 10,
-            "customer": "Ngô Hồng Duyên",
-            "phone": "0934567890",
-            "service": "Triệt lông công nghệ Diode",
-            "date": "13/02/2026",
-            "time": "11:00",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Liệu trình 5 buổi, hoàn tất buổi thứ 3",
-        },
-        {
-            "id": 11,
-            "customer": "Bùi Thị Mỹ",
-            "phone": "0945678901",
-            "service": "Gội đầu dưỡng sinh",
-            "date": "16/02/2026",
-            "time": "15:00",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Khách mua thêm tinh dầu",
-        },
-        {
-            "id": 12,
-            "customer": "Đỗ Quỳnh Anh",
-            "phone": "0956789012",
-            "service": "Post-Acne Recovery Therapy",
-            "date": "17/02/2026",
-            "time": "9:30",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Khách yêu cầu tư vấn thêm",
-        },
-        {
-            "id": 13,
-            "customer": "Vũ Thị Hương",
-            "phone": "0967890123",
-            "service": "Acne Detox Therapy",
-            "date": "18/02/2026",
-            "time": "16:00",
-            "status": "Đang Tiến Hành",
-            "status_class": "green",
-            "note": "Khách lần đầu đến",
-        },
-        {
-            "id": 14,
-            "customer": "Trịnh Thị Loan",
-            "phone": "0978901234",
-            "service": "Chăm sóc da mặt cao cấp",
-            "date": "19/02/2026",
-            "time": "13:00",
-            "status": "Đã Hủy",
-            "status_class": "red",
-            "note": "Khách hủy 1 giờ trước",
-        },
-        {
-            "id": 15,
-            "customer": "Phan Thị Thảo",
-            "phone": "0989012345",
-            "service": "Massage body thư giãn",
-            "date": "20/02/2026",
-            "time": "10:30",
-            "status": "Hoàn Thành",
-            "status_class": "blue",
-            "note": "Khách đặt lịch tiếp tục",
-        },
+        build_manager_appointment_item(booking)
+        for booking in Booking.objects.select_related("customer", "service", "customer__customer_profile")
+        .order_by("-booking_date", "-booking_time", "-created_at")
     ]
     modal_state = request.GET.get("modal", "")
     return render(
@@ -435,420 +383,50 @@ def appointment_dashboard(request):
         {
             "appointments": appointments,
             "modal_state": modal_state,
+            "status_choices": get_manager_status_choices(),
         },
     )
 
-
 @manager_required
 def customer_dashboard(request):
-    customers = [
-        {
-            "id": 1,
-            "name": "Nguyễn Thị Lan",
-            "gender": "Nữ",
-            "age": "32",
-            "phone": "0901234567",
-            "points": "500 điểm",
-            "email": "nguyen.lan@email.com",
-            "address": "Mỹ An, Ngũ Hành Sơn, TP Đà Nẵng",
-            "history": [
-                {"date": "30/01/2026", "service": "Chăm sóc da mặt cao cấp", "status": "Hoàn Thành",
-                 "price": "1.000.000"},
-                {"date": "15/02/2026", "service": "Post-Acne Recovery Therapy", "status": "Hoàn Thành",
-                 "price": "1.200.000"},
-            ]
-        },
-        {
-            "id": 2,
-            "name": "Phạm Thị Hoài",
-            "gender": "Nữ",
-            "age": "28",
-            "phone": "0905050323",
-            "points": "200 điểm",
-            "email": "pham.hoai@email.com",
-            "address": "Thanh Khê, TP Đà Nẵng",
-            "history": [
-                {"date": "10/02/2026", "service": "Triệt lông công nghệ Diode", "status": "Hoàn Thành",
-                 "price": "800.000"},
-            ]
-        },
-        {
-            "id": 3,
-            "name": "Võ Bích Hợp",
-            "gender": "Nữ",
-            "age": "35",
-            "phone": "0328775385",
-            "points": "1.000 điểm",
-            "email": "vo.bich@email.com",
-            "address": "Hải Châu, TP Đà Nẵng",
-            "history": [
-                {"date": "10/02/2026", "service": "Gội đầu dưỡng sinh", "status": "Hoàn Thành", "price": "300.000"},
-                {"date": "20/02/2026", "service": "Massage body thư giãn", "status": "Hoàn Thành", "price": "800.000"},
-            ]
-        },
-        {
-            "id": 4,
-            "name": "Nguyễn Thị Hoa",
-            "gender": "Nữ",
-            "age": "26",
-            "phone": "0384726564",
-            "points": "300 điểm",
-            "email": "nguyen.hoa@email.com",
-            "address": "Sơn Trà, TP Đà Nẵng",
-            "history": [
-                {"date": "11/02/2026", "service": "Post-Acne Recovery Therapy", "status": "Hoàn Thành",
-                 "price": "1.200.000"},
-            ]
-        },
-        {
-            "id": 5,
-            "name": "Lê Thị Bé Như",
-            "gender": "Nữ",
-            "age": "30",
-            "phone": "0376258537",
-            "points": "600 điểm",
-            "email": "le.be.nhu@email.com",
-            "address": "Liên Chiểu, TP Đà Nẵng",
-            "history": [
-                {"date": "05/02/2026", "service": "Acne Detox Therapy", "status": "Hoàn Thành", "price": "950.000"},
-                {"date": "12/02/2026", "service": "Chăm sóc da mặt cao cấp", "status": "Hoàn Thành",
-                 "price": "1.000.000"},
-            ]
-        },
-        {
-            "id": 6,
-            "name": "Nguyễn Cao Sang",
-            "gender": "Nam",
-            "age": "29",
-            "phone": "0387642458",
-            "points": "100 điểm",
-            "email": "nguyen.sang@email.com",
-            "address": "Cẩm Lệ, TP Đà Nẵng",
-            "history": [
-                {"date": "12/02/2026", "service": "Acne Detox Therapy", "status": "Hoàn Thành", "price": "950.000"},
-            ]
-        },
-        {
-            "id": 7,
-            "name": "Đoàn Thanh Nhã",
-            "gender": "Nam",
-            "age": "27",
-            "phone": "0927462684",
-            "points": "100 điểm",
-            "email": "doan.nha@email.com",
-            "address": "Ngũ Hành Sơn, TP Đà Nẵng",
-            "history": [
-                {"date": "02/02/2026", "service": "Chăm sóc da mặt cao cấp", "status": "Hoàn Thành",
-                 "price": "1.000.000"},
-            ]
-        },
-        {
-            "id": 8,
-            "name": "Trần Thị Yến",
-            "gender": "Nữ",
-            "age": "31",
-            "phone": "0912345678",
-            "points": "750 điểm",
-            "email": "tran.yen@email.com",
-            "address": "Thanh Khê, TP Đà Nẵng",
-            "history": [
-                {"date": "15/02/2026", "service": "Chăm sóc da mặt cao cấp", "status": "Hoàn Thành",
-                 "price": "1.000.000"},
-                {"date": "18/02/2026", "service": "Acne Detox Therapy", "status": "Hoàn Thành", "price": "950.000"},
-            ]
-        },
-        {
-            "id": 9,
-            "name": "Lương Thị Nhà",
-            "gender": "Nữ",
-            "age": "24",
-            "phone": "0923456789",
-            "points": "450 điểm",
-            "email": "luong.nha@email.com",
-            "address": "Hải Châu, TP Đà Nẵng",
-            "history": [
-                {"date": "14/02/2026", "service": "Massage body thư giãn", "status": "Hoàn Thành", "price": "800.000"},
-            ]
-        },
-        {
-            "id": 10,
-            "name": "Ngô Hồng Duyên",
-            "gender": "Nữ",
-            "age": "33",
-            "phone": "0934567890",
-            "points": "900 điểm",
-            "email": "ngo.duyen@email.com",
-            "address": "Sơn Trà, TP Đà Nẵng",
-            "history": [
-                {"date": "13/02/2026", "service": "Triệt lông công nghệ Diode", "status": "Hoàn Thành",
-                 "price": "800.000"},
-                {"date": "20/02/2026", "service": "Triệt lông công nghệ Diode", "status": "Hoàn Thành",
-                 "price": "800.000"},
-            ]
-        },
-        {
-            "id": 11,
-            "name": "Bùi Thị Mỹ",
-            "gender": "Nữ",
-            "age": "25",
-            "phone": "0945678901",
-            "points": "350 điểm",
-            "email": "bui.my@email.com",
-            "address": "Liên Chiểu, TP Đà Nẵng",
-            "history": [
-                {"date": "16/02/2026", "service": "Gội đầu dưỡng sinh", "status": "Hoàn Thành", "price": "300.000"},
-            ]
-        },
-        {
-            "id": 12,
-            "name": "Đỗ Quỳnh Anh",
-            "gender": "Nữ",
-            "age": "29",
-            "phone": "0956789012",
-            "points": "550 điểm",
-            "email": "do.anh@email.com",
-            "address": "Cẩm Lệ, TP Đà Nẵng",
-            "history": [
-                {"date": "17/02/2026", "service": "Post-Acne Recovery Therapy", "status": "Hoàn Thành",
-                 "price": "1.200.000"},
-            ]
-        },
-        {
-            "id": 13,
-            "name": "Vũ Thị Hương",
-            "gender": "Nữ",
-            "age": "27",
-            "phone": "0967890123",
-            "points": "250 điểm",
-            "email": "vu.huong@email.com",
-            "address": "Thanh Khê, TP Đà Nẵng",
-            "history": [
-                {"date": "18/02/2026", "service": "Acne Detox Therapy", "status": "Hoàn Thành", "price": "950.000"},
-            ]
-        },
-        {
-            "id": 14,
-            "name": "Trịnh Thị Loan",
-            "gender": "Nữ",
-            "age": "34",
-            "phone": "0978901234",
-            "points": "150 điểm",
-            "email": "trinh.loan@email.com",
-            "address": "Hải Châu, TP Đà Nẵng",
-            "history": [
-                {"date": "08/02/2026", "service": "Gội đầu dưỡng sinh", "status": "Hoàn Thành", "price": "300.000"},
-                {"date": "15/02/2026", "service": "Triệt lông công nghệ Diode", "status": "Hoàn Thành",
-                 "price": "800.000"},
-            ]
-        },
-        {
-            "id": 15,
-            "name": "Phan Thị Thảo",
-            "gender": "Nữ",
-            "age": "28",
-            "phone": "0989012345",
-            "points": "800 điểm",
-            "email": "phan.thao@email.com",
-            "address": "Sơn Trà, TP Đà Nẵng",
-            "history": [
-                {"date": "20/02/2026", "service": "Massage body thư giãn", "status": "Hoàn Thành", "price": "800.000"},
-                {"date": "25/02/2026", "service": "Chăm sóc da mặt cao cấp", "status": "Hoàn Thành",
-                 "price": "1.000.000"},
-            ]
-        },
-        {
-            "id": 16,
-            "name": "Nguyễn Thanh Huyền",
-            "gender": "Nữ",
-            "age": "30",
-            "phone": "0990123456",
-            "points": "420 điểm",
-            "email": "nguyen.huyen@email.com",
-            "address": "Liên Chiểu, TP Đà Nẵng",
-            "history": [
-                {"date": "14/02/2026", "service": "Acne Detox Therapy", "status": "Hoàn Thành", "price": "950.000"},
-            ]
-        },
-        {
-            "id": 17,
-            "name": "Hoàng Thị Linh",
-            "gender": "Nữ",
-            "age": "26",
-            "phone": "0901111111",
-            "points": "680 điểm",
-            "email": "hoang.linh@email.com",
-            "address": "Cẩm Lệ, TP Đà Nẵng",
-            "history": [
-                {"date": "13/02/2026", "service": "Gội đầu dưỡng sinh", "status": "Hoàn Thành", "price": "300.000"},
-                {"date": "19/02/2026", "service": "Triệt lông công nghệ Diode", "status": "Hoàn Thành",
-                 "price": "800.000"},
-            ]
-        },
-        {
-            "id": 18,
-            "name": "Phạm Minh Châu",
-            "gender": "Nữ",
-            "age": "32",
-            "phone": "0902222222",
-            "points": "520 điểm",
-            "email": "pham.chau@email.com",
-            "address": "Ngũ Hành Sơn, TP Đà Nẵng",
-            "history": [
-                {"date": "16/02/2026", "service": "Post-Acne Recovery Therapy", "status": "Hoàn Thành",
-                 "price": "1.200.000"},
-            ]
-        },
-        {
-            "id": 19,
-            "name": "Cao Thị Phương",
-            "gender": "Nữ",
-            "age": "29",
-            "phone": "0903333333",
-            "points": "380 điểm",
-            "email": "cao.phuong@email.com",
-            "address": "Thanh Khê, TP Đà Nẵng",
-            "history": [
-                {"date": "17/02/2026", "service": "Chăm sóc da mặt cao cấp", "status": "Hoàn Thành",
-                 "price": "1.000.000"},
-            ]
-        },
-        {
-            "id": 20,
-            "name": "Lê Minh Hiền",
-            "gender": "Nữ",
-            "age": "27",
-            "phone": "0904444444",
-            "points": "620 điểm",
-            "email": "le.hien@email.com",
-            "address": "Hải Châu, TP Đà Nẵng",
-            "history": [
-                {"date": "18/02/2026", "service": "Massage body thư giãn", "status": "Hoàn Thành", "price": "800.000"},
-                {"date": "22/02/2026", "service": "Acne Detox Therapy", "status": "Hoàn thành", "price": "950.000"},
-            ]
-        },
-    ]
+    sync_completed_bookings()
+    users = User.objects.filter(is_staff=False).select_related("customer_profile").order_by("username")
+    customers = [build_manager_customer_item(user) for user in users]
     return render(request, "customer_dashboard.html", {"customers": customers})
-
 
 @manager_required
 def customer_detail(request, customer_id):
-    customer = {
-        "id": customer_id,
-        "name": "Nguyễn Thị Lan",
-        "gender": "Nữ",
-        "age": "32",
-        "email": "nguyenlanvn@gmail.com",
-        "address": "Mỹ An, Ngũ Hành Sơn, TP Đà Nẵng",
-        "history": [
-            {
-                "date": "30/01/2026",
-                "service": "Chăm sóc da mặt cao cấp",
-                "status": "Hoàn Thành",
-                "price": "1.000.000",
-            },
-            {
-                "date": "11/02/2026",
-                "service": "Post-Acne Recovery Therapy",
-                "status": "Hoàn Thành",
-                "price": "1.200.000",
-            },
-        ],
-    }
+    user = get_object_or_404(User, id=customer_id, is_staff=False)
+    customer = build_manager_customer_item(user)
     return render(request, "customer_detail.html", {"customer": customer})
-
 
 @manager_required
 def feedback_dashboard(request):
-    names = [
-        "Hương Nguyễn", "Luyện Đặng", "Tuyết Sương", "Linh Phương", "Quỳnh Anh",
-        "Minh Hoa", "Trúc Nhan", "Thanh Vân", "Khuê Ngôn", "Hà Linh",
-        "Tú Anh", "Xuân Hương", "Diệp Chi", "Vân Anh", "Hồng Nhân",
-        "Thảo Vy", "Bảo Anh", "Phương Thảo", "Khánh Linh", "Minh Châu",
-        "Anh Tuấn", "Bảo Ngân", "Châu Giang", "Đức Minh", "Gia Hân",
-        "Hải Yến", "Ích Nhân", "Khắc Quân", "Liêu Phương", "Minh Tú",
-        "Ngân Hà", "Oanh Lê", "Phúc Lâm", "Quốc Trung", "Rin Shimizu",
-        "Sơn Tùng", "Trâm Anh", "Uyên Thy", "Việt Anh", "Vy Kiều",
-        "Thanh Xuân", "Hương Giang", "Mỹ Duyên", "Ngọc Trinh", "Phương Oanh",
-        "Quỳnh Như", "Thủy Tiên", "Vy Oanh", "Xuan Hương", "Yến Nhi"
-    ]
-
-    services = [
-        "Chăm sóc da mặt cao cấp",
-        "Massage body thư giãn",
-        "Triệt lông công nghệ Diode",
-        "Gội đầu dưỡng sinh",
-        "Trị mụn chuyên sâu",
-        "Acne Detox Therapy",
-        "Post-Acne Recovery Therapy",
-        "Chăm sóc da mặt Collagen",
-        "Triệt lông Laser Diode",
-    ]
-
-    contents = [
-        "Dịch vụ tuyệt vời! Nhân viên rất chuyên nghiệp và tận tâm. Kết quả vượt mong đợi. Sẽ quay lại nhiều lần nữa!",
-        "Rất hài lòng với dịch vụ. Mình cảm thấy thư giãn và thoải mái. Giá cả hợp lý, nhân viên thân thiện.",
-        "Liệu trình rất hiệu quả. Sau vài buổi, tôi đã thấy kết quả rõ rệt. Chắc chắn sẽ tiếp tục sử dụng.",
-        "Không gian sạch sẽ, thoáng mát. Nhân viên tư vấn kỹ lưỡng. Dịch vụ chất lượng cao, đáng giá tiền.",
-        "Trải nghiệm tuyệt vời! Cảm thấy được chăm sóc kỹ lưỡng. Sẽ giới thiệu cho bạn bè.",
-        "Khá tốt, tuy nhiên cần cải thiện một chút về thái độ phục vụ.",
-        "Dịch vụ bình thường, không có gì nổi bật. Kết quả tạm được.",
-        "Không hài lòng với kết quả. Dù giá khá mắc nhưng hiệu quả không như mong đợi.",
-        "Nhân viên rất chu đáo. Tôi cảm thấy được chúc mừng bởi sự tử tế của họ.",
-        "Liệu trình phục hồi da rất tốt. Làn da tôi sáng mịn hơn rất nhiều.",
-    ]
-
-    times = [
-        "1 giờ trước", "3 giờ trước", "5 giờ trước", "1 ngày trước", "2 ngày trước",
-        "3 ngày trước", "5 ngày trước", "1 tuần trước", "2 tuần trước", "3 tuần trước",
-        "1 tháng trước", "1.5 tháng trước", "2 tháng trước", "2.5 tháng trước", "3 tháng trước",
-    ]
-
-    avatar_classes = ["avatar-peach", "avatar-neutral", "avatar-rose", "avatar-sun", "avatar-sea"]
-
-    feedbacks = []
-    ratings = [5.0, 5.0, 5.0, 5.0, 4.0, 4.0, 4.0, 3.0, 2.0, 1.0]
-    statuses = ["Đã phản hồi", "Chưa phản hồi"]
-
-    for i in range(1, 121):
-        rating = float(ratings[(i - 1) % len(ratings)])
-        status = statuses[(i - 1) % len(statuses)]
-        status_class = "green" if status == "Đã phản hồi" else "yellow"
-
-        feedbacks.append({
-            "id": i,
-            "name": names[(i - 1) % len(names)],
-            "time": times[(i - 1) % len(times)],
-            "service": services[(i - 1) % len(services)],
-            "rating": f"{rating}",
-            "status": status,
-            "status_class": status_class,
-            "content": contents[(i - 1) % len(contents)] + f" (Đánh giá #{i})",
-            "avatar_class": avatar_classes[(i - 1) % len(avatar_classes)],
-        })
-
-    total_reviews = len(feedbacks)
-    star_distribution = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
-    total_rating = 0
-
-    for feedback in feedbacks:
-        rating = int(float(feedback["rating"]))
-        star_distribution[rating] += 1
-        total_rating += float(feedback["rating"])
-
-    average_rating = round(total_rating / total_reviews, 1) if total_reviews > 0 else 0
-
+    # LẤY DỮ LIỆU ĐÁNH GIÁ THẬT TỪ DATABASE
+    reviews = Review.objects.all().order_by('-time')
+    total_reviews = reviews.count()
+    average_rating = 0.0
+    if total_reviews > 0:
+        avg = reviews.aggregate(Avg('rating'))['rating__avg']
+        average_rating = round(avg, 1) if avg else 0.0
+    stars = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
+    star_counts = reviews.values('rating').annotate(count=Count('rating'))
+    for item in star_counts:
+        if item['rating'] in stars:
+            stars[item['rating']] = item['count']
+    def get_percent(count, total):
+        return round((count / total) * 100) if total > 0 else 0
     star_stats = []
     for star_num in [5, 4, 3, 2, 1]:
-        count = star_distribution[star_num]
-        percentage = (count / total_reviews * 100) if total_reviews > 0 else 0
+        count = stars[star_num]
+        percentage = get_percent(count, total_reviews)
         star_stats.append({
             "star": star_num,
             "count": count,
-            "percentage": int(percentage)
+            "percentage": percentage
         })
-
     return render(request, "feedback_dashboard.html", {
-        "feedbacks": feedbacks,
+        "feedbacks": reviews,
         "average_rating": average_rating,
         "total_reviews": total_reviews,
         "star_stats": star_stats
@@ -1015,6 +593,8 @@ def customer_account(request):
             "avatar_url": "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=400&q=80",
         },
     )
+    sync_completed_bookings(request.user)
+    profile = sync_customer_points(request.user)
 
     if request.method == "POST":
         form = CustomerProfileForm(request.POST, instance=profile)
@@ -1491,6 +1071,31 @@ def public_review_page(request):
         "star_1_count": stars[1], "star_1_percent": get_percent(stars[1]),
     }
     return render(request, "public_reviews.html", context)
+
+
+@require_POST
+@manager_required
+def api_update_booking_status(request, booking_id):
+    sync_completed_bookings()
+    booking = get_object_or_404(Booking, id=booking_id)
+    new_status = request.POST.get("status", "").strip()
+    valid_statuses = {choice["value"] for choice in get_manager_status_choices()}
+
+    if new_status not in valid_statuses:
+        return JsonResponse({"status": "error", "message": "Trạng thái không hợp lệ."}, status=400)
+
+    booking.status = new_status
+    booking.save(update_fields=["status"])
+    sync_completed_bookings()
+    booking.refresh_from_db(fields=["status"])
+    status_label, status_class = get_manager_status_meta(booking.status)
+
+    return JsonResponse({
+        "status": "success",
+        "booking_status": booking.status,
+        "status_label": status_label,
+        "status_class": status_class,
+    })
 
 
 @require_POST

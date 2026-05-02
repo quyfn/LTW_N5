@@ -69,11 +69,21 @@
                             data-customer="{{ item.customer }}"
                             data-phone="{{ item.phone }}"
                             data-service="{{ item.service }}"
+                            data-package="{{ item.package }}"
+                            data-sessions="{{ item.sessions }}"
+                            data-package-description="{{ item.package_description }}"
                             data-date="{{ item.date }}"
                             data-time="{{ item.time }}"
+                            data-price="{{ item.price }}"
                             data-status="{{ item.status }}"
+                            data-raw-status="{{ item.raw_status }}"
                             data-status-class="{{ item.status_class }}"
+                            data-email="{{ item.email }}"
+                            data-birth-date="{{ item.birth_date }}"
+                            data-address="{{ item.address }}"
                             data-note="{{ item.note }}"
+                            data-customer-notes="{{ item.customer_notes }}"
+                            data-update-url="{{ item.update_url }}"
                         >
                             <td>
                                 <div class="appointment-customer">
@@ -102,46 +112,79 @@
             </div>
             <div class="appointment-detail-grid two-cols">
                 <div class="appointment-field">
-                    <span>Khách Hàng</span>
+                    <span>Khách hàng</span>
                     <strong data-detail-customer></strong>
                 </div>
                 <div class="appointment-field">
-                    <span>Số Điện Thoại</span>
+                    <span>Số điện thoại</span>
                     <strong data-detail-phone></strong>
                 </div>
+                <div class="appointment-field">
+                    <span>Email</span>
+                    <strong data-detail-email></strong>
+                </div>
+                <div class="appointment-field">
+                    <span>Ngày sinh</span>
+                    <strong data-detail-birth-date></strong>
+                </div>
                 <div class="appointment-field full-width">
-                    <span>Dịch Vụ</span>
+                    <span>Địa chỉ</span>
+                    <strong data-detail-address></strong>
+                </div>
+                <div class="appointment-field full-width">
+                    <span>Dịch vụ</span>
                     <strong data-detail-service></strong>
                 </div>
                 <div class="appointment-field">
-                    <span>Ngày Hẹn</span>
+                    <span>Gói dịch vụ</span>
+                    <strong data-detail-package></strong>
+                </div>
+                <div class="appointment-field">
+                    <span>Số buổi</span>
+                    <strong data-detail-sessions></strong>
+                </div>
+                <div class="appointment-field">
+                    <span>Ngày hẹn</span>
                     <strong data-detail-date></strong>
                 </div>
                 <div class="appointment-field">
-                    <span>Giờ Hẹn</span>
+                    <span>Giờ hẹn</span>
                     <strong data-detail-time></strong>
                 </div>
-                <div class="appointment-field full-width">
-                    <span>Trạng Thái</span>
+                <div class="appointment-field">
+                    <span>Chi phí</span>
+                    <strong data-detail-price></strong>
+                </div>
+                <div class="appointment-field">
+                    <span>Trạng thái</span>
                     <div class="appointment-status-slot">
                         <span class="status-pill" data-detail-status></span>
                     </div>
                 </div>
                 <div class="appointment-field full-width">
-                    <span>Ghi Chú</span>
+                    <span>Mô tả gói</span>
+                    <strong data-detail-package-description></strong>
+                </div>
+                <div class="appointment-field full-width">
+                    <span>Ghi chú đặt lịch</span>
                     <strong data-detail-note></strong>
                 </div>
                 <div class="appointment-field full-width">
-                    <span>Cập Nhật Trạng Thái</span>
+                    <span>Ghi chú cá nhân</span>
+                    <strong data-detail-customer-notes></strong>
+                </div>
+                <div class="appointment-field full-width">
+                    <span>Cập nhật trạng thái</span>
                     <div class="appointment-status-slot">
                         <select class="status-select" data-status-select>
-                            <option value="Đang tiến hành">Đang tiến hành</option>
-                            <option value="Hoàn thành">Hoàn thành</option>
-                            <option value="Đã hủy">Đã hủy</option>
+                            {% for status in status_choices %}
+                            <option value="{{ status.value }}">{{ status.label }}</option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
             </div>
+            <input type="hidden" data-appointment-csrf value="{{ csrf_token }}">
             <div class="appointment-detail-actions">
                 <button type="button" class="secondary-btn" data-close-modal>Hủy</button>
                 <button type="button" class="primary-btn" data-update-status>Cập Nhật</button>

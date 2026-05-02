@@ -47,7 +47,7 @@
                             data-customer-email="{{ customer.email }}"
                             data-customer-address="{{ customer.address }}"
                             data-customer-points="{{ customer.points }}"
-                            data-customer-history="{{ customer.history|safe }}">
+                            data-customer-history="{{ customer.history_json|escape }}">
                             <td>
                                 <div class="customer-name-cell">
                                     <strong>{{ customer.name }}</strong>
@@ -55,7 +55,7 @@
                                 </div>
                             </td>
                             <td>{{ customer.phone }}</td>
-                            <td>{{ customer.points }}</td>
+                            <td data-customer-points-cell>{{ customer.points }}</td>
                             <td>
                                 <button class="eye-btn customer-view-btn" type="button" aria-label="Xem chi tiết">
                                     <span class="eye-icon" aria-hidden="true"></span>

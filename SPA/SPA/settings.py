@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-ju8l4%w2-mnfs=09=l6y&3l=tz4perql!5l0s9acsdy%z(um2@
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "testserver"]
 
 
 # Application definition
@@ -69,6 +69,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'SPA.wsgi.application'
+ASGI_APPLICATION = 'SPA.asgi.application'
 
 
 # Database
