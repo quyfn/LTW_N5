@@ -1,11 +1,19 @@
+
+from datetime import date, timedelta
+
 import random
 from datetime import date, datetime, timedelta
+
 
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth.models import User
+
+from .forms import CustomerProfileForm, LoginForm, RegisterForm
+from services.models import CustomerProfile, Service, ChatRoom, Message, Review
+import random
 from django.db import transaction
 from django.http import JsonResponse
 from django.urls import reverse
@@ -44,6 +52,7 @@ def can_cancel_booking(booking):
     if booking.status != "Đang Xử Lý":
         return False
     return timezone.now() <= booking.created_at + timedelta(hours=24)
+
 
 
 def redirect_by_role(request):
@@ -110,6 +119,33 @@ def serialize_service(service):
     }
 
 # ĐÃ CẬP NHẬT ĐỂ BƠM DATA CHO POPUP 2 CỘT BÊN HTML
+def build_customer_history(user=None):
+    if user is None or not user.is_authenticated:
+        return []
+
+    sync_completed_bookings(user)
+    profile, _ = CustomerProfile.objects.get_or_create(user=user)
+
+    history = []
+    for booking in Booking.objects.filter(customer=user).select_related("service").order_by("-created_at"):
+        history.append(
+            {
+                "date": booking.booking_date.strftime("%d/%m/%Y"),
+                "time": booking.booking_time.strftime("%H:%M"),
+                "service": booking.service.name if booking.service else "Dịch vụ",
+                "package": booking.package_name,
+                "sessions": booking.sessions,
+                "desc": booking.package_description or "",
+                "status": get_customer_booking_status(booking.status),
+                "price": f"{format_service_price(booking.total_price)}đ",
+                "c_name": profile.display_name,
+                "c_phone": profile.phone or "Chưa cập nhật",
+                "c_email": user.email,
+                "c_notes": booking.notes or "Không có ghi chú thêm",
+            }
+        )
+
+    return history
 def build_customer_history(user=None):
     if user is None or not user.is_authenticated:
         return []
@@ -1052,7 +1088,73 @@ def customer_account(request):
     }
     return render(request, "customer_account.html", context)
 
+def build_booking_calendar(days=31):
+    today = date.today()
+    end_date = today + timedelta(days=days - 1)
+    first_day = today.replace(day=1)
 
+    items = []
+    for _ in range(first_day.weekday()):
+        items.append({"blank": True})
+
+    current = first_day
+    while current <= end_date:
+        is_in_range = today <= current <= end_date
+        items.append(
+            {
+                "blank": False,
+                "day": current.day,
+                "iso": current.isoformat(),
+                "disabled": not is_in_range,
+                "is_today": current == today,
+            }
+        )
+        current += timedelta(days=1)
+
+    return items
+
+
+@customer_required
+def booking_page(request):
+    if request.method == "POST":
+        service_id = request.POST.get("service_id")
+        booking_date_raw = request.POST.get("booking_date")
+        booking_time_raw = request.POST.get("booking_time")
+
+        try:
+            service = Service.objects.get(id=service_id, status=Service.STATUS_ACTIVE)
+            booking_date = datetime.strptime(booking_date_raw, "%Y-%m-%d").date()
+            booking_time = datetime.strptime(booking_time_raw, "%H:%M").time()
+        except Exception:
+            messages.error(request, "Thông tin đặt lịch không hợp lệ.")
+            return redirect("booking")
+
+        with transaction.atomic():
+            exists = Booking.objects.filter(
+                booking_date=booking_date,
+                booking_time=booking_time
+            ).exclude(status="Đã Hủy").exists()
+
+            if exists:
+                messages.error(request, "Khung giờ đã được đặt.")
+                return redirect("booking")
+
+            Booking.objects.create(
+                customer=request.user,
+                service=service,
+                booking_date=booking_date,
+                booking_time=booking_time,
+            )
+
+        messages.success(request, "Đặt lịch thành công.")
+        return redirect("/tai-khoan/?tab=history")
+
+    services = Service.objects.filter(status=Service.STATUS_ACTIVE)
+
+    return render(request, "booking.html", {
+        "services": services,
+        "calendar_days": build_booking_calendar(),
+    })
 @customer_required
 def cancel_booking(request, booking_id):
     if request.method != "POST":
@@ -1184,6 +1286,7 @@ def booking_page(request):
             "image_url": service.image_url or "/static/images/service-fallback.svg",
         }
         for service in db_services
+
     ]
 
     package_catalog = [
@@ -1242,6 +1345,7 @@ def booking_page(request):
                 "Thủ công nghệ trị liệu mới",
                 "Tặng bộ skincare cao cấp",
             ],
+            "theme": "vip",
         },
     ]
 
@@ -1285,6 +1389,7 @@ def booking_page(request):
             "phone": profile.phone or "Chưa cập nhật",
             "email": request.user.email,
         },
+        "history": build_customer_history(),
         "history": build_customer_history(request.user),
     }
     return render(request, "booking.html", context)
@@ -1303,7 +1408,6 @@ def booking_slots(request):
         return JsonResponse({"booked_slots": [], "slots": BOOKING_TIME_SLOTS}, status=400)
 
     return JsonResponse({"booked_slots": get_booked_slots_for_date(selected_date), "slots": BOOKING_TIME_SLOTS})
-
 
 def see_service(request):
     services = [
@@ -1437,3 +1541,4 @@ def public_review_page(request):
         "star_1_count": stars[1], "star_1_percent": get_percent(stars[1]),
     }
     return render(request, "public_reviews.html", context)
+
