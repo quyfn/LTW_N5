@@ -1,381 +1,151 @@
-const body = document.body;
-const backdrop = document.querySelector("[data-backdrop]");
-const modals = document.querySelectorAll(".modal");
+document.addEventListener("DOMContentLoaded", function () {
+    const body = document.body;
+    const backdrop = document.querySelector("[data-backdrop]");
+    const modals = document.querySelectorAll(".modal");
+    let currentSelectedServiceId = null;
 
-function openModal(modalId) {
-    modals.forEach((modal) => modal.classList.add("hidden"));
-    const target = document.getElementById(modalId);
-    if (!target) {
-        return;
+    function openModal(modalId) {
+        modals.forEach(m => m.classList.add("hidden"));
+        const target = document.getElementById(modalId);
+        if (target) {
+            target.classList.remove("hidden");
+            if (backdrop) backdrop.classList.remove("hidden");
+            body.classList.add("modal-open");
+        }
     }
-    target.classList.remove("hidden");
-    backdrop.classList.remove("hidden");
-    body.classList.add("modal-open");
-}
 
-function closeAllModals() {
-    modals.forEach((modal) => modal.classList.add("hidden"));
-    backdrop.classList.add("hidden");
-    body.classList.remove("modal-open");
-}
+    function closeAllModals() {
+        modals.forEach(m => m.classList.add("hidden"));
+        if (backdrop) backdrop.classList.add("hidden");
+        body.classList.remove("modal-open");
+    }
 
-document.querySelectorAll("[data-modal-target]").forEach((button) => {
-    button.addEventListener("click", () => {
-        openModal(button.dataset.modalTarget);
+    document.querySelectorAll("[data-modal-target]").forEach(btn => {
+        btn.addEventListener("click", () => openModal(btn.dataset.modalTarget));
     });
-});
+    document.querySelectorAll("[data-close-modal]").forEach(btn => btn.addEventListener("click", closeAllModals));
+    if (backdrop) backdrop.addEventListener("click", closeAllModals);
 
-document.querySelectorAll("[data-close-modal]").forEach((button) => {
-    button.addEventListener("click", closeAllModals);
-});
-
-if (backdrop) {
-    backdrop.addEventListener("click", closeAllModals);
-}
-
-function normalizePrice(value) {
-    return Number(value.replace(/\./g, "").replace(/\s/g, ""));
-}
-
-function normalizeServiceName(value) {
-    return value
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/đ/g, "d")
-        .replace(/Đ/g, "D")
-        .toLowerCase()
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-function getExistingServiceNames() {
-    return Array.from(document.querySelectorAll(".service-cell span"))
-        .map((node) => normalizeServiceName(node.textContent))
-        .filter(Boolean);
-}
-
-function validateForm(form) {
-    const formType = form.dataset.formType;
-    const allowedImageTypes = ["image/png", "image/jpeg", "image/webp"];
-    const maxImageSize = 5 * 1024 * 1024;
-    const existingServiceNames = getExistingServiceNames();
-
-    if (formType === "add-service" || formType === "edit-service") {
-        const name = form.querySelector('[name="name"]').value.trim();
-        const description = form.querySelector('[name="description"]').value.trim();
-        const price = normalizePrice(form.querySelector('[name="price"]').value.trim());
-        const imageInput = form.querySelector('.upload-input[name="image"]');
-        const imageFile = imageInput && imageInput.files ? imageInput.files[0] : null;
-
-        if (!name) {
-            return "error-empty-name";
+    // Lấy ID khi bấm nút sửa
+    document.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('.edit-trigger');
+        if (editBtn) {
+            currentSelectedServiceId = editBtn.dataset.id;
+            const row = document.querySelector(`tr[data-service-id="${currentSelectedServiceId}"]`);
+            if (row) {
+                const editForm = document.getElementById('edit-service-form');
+                if(editForm) {
+                    editForm.querySelector('input[name="service_id"]').value = currentSelectedServiceId;
+                    editForm.querySelector('input[name="name"]').value = row.querySelector('.js-service-name').textContent.trim();
+                    editForm.querySelector('textarea[name="description"]').value = row.querySelector('.js-service-desc').textContent.trim();
+                    editForm.querySelector('input[name="price"]').value = row.querySelector('.js-service-price').textContent.trim();
+                }
+                
+                const updatePriceForm = document.getElementById('update-price-form');
+                if(updatePriceForm) {
+                    updatePriceForm.querySelector('input[name="service_id"]').value = currentSelectedServiceId;
+                    updatePriceForm.querySelector('input[name="current_price"]').value = row.querySelector('.js-service-price').textContent.trim();
+                }
+            }
         }
-        if (!description) {
-            return "error-empty-description";
-        }
-        if (!Number.isFinite(price) || price <= 0) {
-            return "error-invalid-price";
-        }
-        if (formType === "add-service" && existingServiceNames.includes(normalizeServiceName(name))) {
-            return "error-duplicate-service";
-        }
-        if (imageFile && !allowedImageTypes.includes(imageFile.type)) {
-            return "error-invalid-image-type";
-        }
-        if (imageFile && imageFile.size > maxImageSize) {
-            return "error-image-too-large";
-        }
-        return "success-save-service";
+    });
+
+    function getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || "";
     }
 
-    if (formType === "update-price") {
-        const newPrice = normalizePrice(form.querySelector('[name="new_price"]').value.trim());
-        if (!Number.isFinite(newPrice) || newPrice <= 0) {
-            return "error-invalid-price";
-        }
-        return "success-save-service";
-    }
-
-    return "success-save-service";
-}
-
-document.querySelectorAll("form[data-form-type]").forEach((form) => {
-    form.addEventListener("submit", (event) => {
-        event.preventDefault();
-
-        if (form.dataset.formType === "reply-feedback") {
-            const value = form.querySelector('[name="reply"]').value.trim();
-            if (!value) {
-                openModal("reply-empty-modal");
+    // CALL API THẬT
+    document.querySelectorAll("form[data-form-type]").forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); 
+            
+            // BỌC THÉP TRÁNH SUBMIT RỖNG
+            if (!form.checkValidity()) {
+                form.reportValidity();
                 return;
             }
-            if (value.toLowerCase().includes("fail")) {
-                openModal("reply-failed-modal");
-                return;
+
+            const formType = form.dataset.formType;
+            if (formType === "consultation-send") return; // Bỏ qua form chat
+
+            const formData = new FormData(form);
+            let endpoint = "";
+            if (formType === "add-service") endpoint = "/api/services/create/";
+            else if (formType === "edit-service") endpoint = "/api/services/update/";
+            else if (formType === "update-price") endpoint = "/api/services/update-price/";
+
+            try {
+                const res = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "X-CSRFToken": getCsrfToken() },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    if (formType === "add-service") {
+                        window.location.reload(); 
+                    } else {
+                        // UPDATE UI realtime
+                        const row = document.querySelector(`tr[data-service-id="${currentSelectedServiceId}"]`);
+                        if (row) {
+                            if (data.new_price_formatted) row.querySelector('.js-service-price').textContent = `${data.new_price_formatted}đ`;
+                            if (data.new_name) row.querySelector('.js-service-name').textContent = data.new_name;
+                            if (data.new_desc) row.querySelector('.js-service-desc').textContent = data.new_desc;
+                        }
+                        closeAllModals();
+                        alert("Lưu thành công!");
+                    }
+                } else {
+                    const errData = await res.json();
+                    console.error("LỖI TỪ SERVER:", errData);
+                    alert("Lỗi: " + (errData.message || "Không thể thực hiện"));
+                }
+            } catch (err) {
+                console.error("LỖI JS:", err);
+                alert("Thao tác thất bại!");
             }
-            openModal("reply-success-modal");
-            return;
-        }
-
-        openModal(validateForm(form));
-    });
-});
-
-document.querySelectorAll(".upload-input").forEach((input) => {
-    const uploadBox = input.closest(".upload-box");
-    if (!uploadBox) {
-        return;
-    }
-
-    const fileName = uploadBox.querySelector("[data-file-name]");
-    const preview = uploadBox.querySelector("[data-upload-preview]");
-    const previewImage = preview ? preview.querySelector("img") : null;
-
-    input.addEventListener("change", () => {
-        const [file] = input.files || [];
-
-        if (!file) {
-            if (fileName) {
-                fileName.textContent = "Chưa chọn tệp nào";
-            }
-            if (preview && previewImage) {
-                preview.classList.add("hidden");
-                previewImage.src = "";
-            }
-            return;
-        }
-
-        if (fileName) {
-            fileName.textContent = file.name;
-        }
-
-        if (preview && previewImage) {
-            previewImage.src = URL.createObjectURL(file);
-            preview.classList.remove("hidden");
-        }
-    });
-});
-
-const feedbackActionRoot = document.querySelector("[data-feedback-action]");
-
-if (feedbackActionRoot) {
-    const toggle = feedbackActionRoot.querySelector("[data-action-toggle]");
-    const menu = feedbackActionRoot.querySelector("[data-action-menu]");
-    const statusBadge = document.querySelector("[data-feedback-status]");
-    const saveButton = document.querySelector("[data-save-feedback]");
-    let selectedAction = "";
-
-    function setMenuState(open) {
-        menu.classList.toggle("hidden", !open);
-        toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    }
-
-    function applySelectedAction(value) {
-        selectedAction = value;
-
-        feedbackActionRoot.querySelectorAll("[data-selected-chip]").forEach((chip) => {
-            chip.classList.toggle("hidden", chip.dataset.selectedChip !== value);
         });
+    });
 
-        if (statusBadge) {
-            if (value === "violation") {
-                statusBadge.className = "status-badge pink";
-                statusBadge.textContent = "Vi phạm";
-            } else if (value === "deleted") {
-                statusBadge.className = "status-badge gray";
-                statusBadge.textContent = "Đã xóa";
+    // WEBSOCKET CHAT MANAGER
+    const chatManagerForm = document.querySelector('form[data-form-type="consultation-send"]');
+    if (chatManagerForm && typeof roomId !== 'undefined') {
+        const chatSocket = new WebSocket('ws://' + window.location.host + '/ws/chat/' + roomId + '/');
+        const userId = document.body.dataset.userId || 'manager';
+
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const chatThread = document.querySelector(".chat-thread");
+            if (!chatThread) return;
+
+            const emptyWarning = document.querySelector("[data-chat-empty-warning]");
+            if (emptyWarning) emptyWarning.classList.add("hidden");
+
+            const isManager = data.user_id == userId || data.user_id === 'bot';
+            const row = document.createElement("div");
+            row.className = `chat-row ${isManager ? "right" : "left"}`;
+            
+            if (isManager) {
+                row.innerHTML = `<div class="chat-time">${new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'})}</div>
+                                 <div class="chat-bubble solid">${data.message}</div>
+                                 <div class="manager-avatar mini"></div>`;
             } else {
-                statusBadge.className = "status-badge yellow";
-                statusBadge.textContent = "Chưa phản hồi";
-            }
-        }
-    }
-
-    toggle.addEventListener("click", () => {
-        setMenuState(menu.classList.contains("hidden"));
-    });
-
-    menu.querySelectorAll("[data-action-value]").forEach((option) => {
-        option.addEventListener("click", () => {
-            applySelectedAction(option.dataset.actionValue);
-            setMenuState(false);
-        });
-    });
-
-    document.addEventListener("click", (event) => {
-        if (!feedbackActionRoot.contains(event.target)) {
-            setMenuState(false);
-        }
-    });
-
-    if (saveButton) {
-        saveButton.addEventListener("click", () => {
-            if (!selectedAction) {
-                openModal("process-denied-modal");
-                return;
+                row.innerHTML = `<div class="conversation-avatar tiny"></div>
+                                 <div class="chat-bubble outline">${data.message}</div>`;
             }
 
-            if (selectedAction === "deleted") {
-                openModal("process-failed-modal");
-                return;
-            }
+            chatThread.appendChild(row);
+            chatThread.scrollTop = chatThread.scrollHeight;
+        };
 
-            openModal("process-success-modal");
+        chatManagerForm.addEventListener("submit", e => {
+            e.preventDefault();
+            const input = chatManagerForm.querySelector('[name="message"]');
+            const msg = input.value.trim();
+            if (!msg) return;
+            chatSocket.send(JSON.stringify({ message: msg, user_id: userId, is_auto: false }));
+            input.value = "";
         });
     }
-}
-
-const appointmentRows = document.querySelectorAll("[data-appointment-item]");
-
-if (appointmentRows.length) {
-    const detailStatus = document.querySelector("[data-detail-status]");
-    const detailFields = {
-        customer: document.querySelector("[data-detail-customer]"),
-        phone: document.querySelector("[data-detail-phone]"),
-        service: document.querySelector("[data-detail-service]"),
-        date: document.querySelector("[data-detail-date]"),
-        time: document.querySelector("[data-detail-time]"),
-        note: document.querySelector("[data-detail-note]"),
-    };
-
-    function fillAppointmentDetail(row) {
-        detailFields.customer.textContent = row.dataset.customer;
-        detailFields.phone.textContent = row.dataset.phone;
-        detailFields.service.textContent = row.dataset.service;
-        detailFields.date.textContent = row.dataset.date;
-        detailFields.time.textContent = row.dataset.time;
-        detailFields.note.textContent = row.dataset.note;
-        detailStatus.className = `status-pill ${row.dataset.statusClass}`;
-        detailStatus.textContent = row.dataset.status;
-
-        // Set dropdown value
-        const statusSelect = document.querySelector("[data-status-select]");
-        if (statusSelect) {
-            statusSelect.value = row.dataset.status;
-        }
-    }
-
-    appointmentRows.forEach((row) => {
-        row.addEventListener("click", () => {
-            fillAppointmentDetail(row);
-            openModal("appointment-detail-modal");
-        });
-    });
-
-    // Handle status update
-    const updateStatusBtn = document.querySelector("[data-update-status]");
-    if (updateStatusBtn) {
-        updateStatusBtn.addEventListener("click", () => {
-            const statusSelect = document.querySelector("[data-status-select]");
-            if (!statusSelect) return;
-
-            const newStatus = statusSelect.value;
-            const currentRow = Array.from(appointmentRows).find(row =>
-                row.dataset.customer === detailFields.customer.textContent &&
-                row.dataset.date === detailFields.date.textContent &&
-                row.dataset.time === detailFields.time.textContent
-            );
-
-            if (currentRow) {
-                // Update row data
-                currentRow.dataset.status = newStatus;
-
-                // Update status class based on new status
-                let statusClass = "";
-                if (newStatus === "Hoàn thành") {
-                    statusClass = "green";
-                } else if (newStatus === "Đang tiến hành") {
-                    statusClass = "blue";
-                } else if (newStatus === "Đã hủy") {
-                    statusClass = "red";
-                }
-
-                currentRow.dataset.statusClass = statusClass;
-
-                // Update table cell
-                const statusCell = currentRow.querySelector("td:last-child .status-pill");
-                if (statusCell) {
-                    statusCell.className = `status-pill ${statusClass}`;
-                    statusCell.textContent = newStatus;
-                }
-
-                // Close modal
-                closeAllModals();
-
-                // Show success message
-                alert("Cập nhật trạng thái thành công!");
-            }
-        });
-    }
-
-    const initialModal = body.dataset.initialModal;
-    if (initialModal === "list-error") {
-        openModal("appointment-list-error-modal");
-    } else if (initialModal === "detail-error") {
-        openModal("appointment-detail-error-modal");
-    }
-}
-
-const consultationForm = document.querySelector('form[data-form-type="consultation-send"]');
-const conversationLinks = document.querySelectorAll("[data-conversation-id]");
-
-if (conversationLinks.length) {
-    const storageKey = "spa-read-conversations";
-    let readIds = [];
-
-    try {
-        readIds = JSON.parse(window.localStorage.getItem(storageKey) || "[]");
-    } catch (error) {
-        readIds = [];
-    }
-
-    const readSet = new Set(readIds.map((id) => String(id)));
-
-    conversationLinks.forEach((link) => {
-        const conversationId = String(link.dataset.conversationId);
-
-        if (readSet.has(conversationId)) {
-            link.classList.remove("is-unread");
-        }
-
-        link.addEventListener("click", () => {
-            readSet.add(conversationId);
-            window.localStorage.setItem(storageKey, JSON.stringify(Array.from(readSet)));
-        });
-    });
-}
-
-if (consultationForm) {
-    const input = consultationForm.querySelector('[name="message"]');
-    const emptyWarning = document.querySelector("[data-chat-empty-warning]");
-    const initialModal = body.dataset.initialModal;
-
-    if (initialModal === "send-error") {
-        openModal("consultation-send-error-modal");
-    }
-
-    consultationForm.addEventListener("submit", (event) => {
-        event.preventDefault();
-        const value = input.value.trim();
-
-        if (!value) {
-            emptyWarning.classList.remove("hidden");
-            return;
-        }
-
-        emptyWarning.classList.add("hidden");
-
-        if (value.toLowerCase().includes("fail")) {
-            openModal("consultation-send-error-modal");
-            return;
-        }
-
-        input.value = "";
-    });
-
-    input.addEventListener("input", () => {
-        if (input.value.trim()) {
-            emptyWarning.classList.add("hidden");
-        }
-    });
-}
+});

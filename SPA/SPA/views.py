@@ -2,7 +2,9 @@
 from datetime import date, timedelta
 
 import random
+import uuid
 from datetime import date, datetime, timedelta
+from django.utils.text import slugify
 
 
 from django.shortcuts import get_object_or_404, redirect, render
@@ -10,9 +12,9 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.contrib.auth.models import User
+from services.models import Service, Booking, CustomerProfile, ChatRoom, Message, Review
 
 from .forms import CustomerProfileForm, LoginForm, RegisterForm
-from services.models import CustomerProfile, Service, ChatRoom, Message, Review
 import random
 from django.db import transaction
 from django.http import JsonResponse
@@ -21,7 +23,10 @@ from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from .forms import CustomerProfileForm, LoginForm, RegisterForm
-from services.models import Booking, CustomerProfile, Service, ChatRoom, Message, Review
+
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+from django.shortcuts import get_object_or_404
 
 BOOKING_TIME_SLOTS = [f"{hour:02d}:00" for hour in range(8, 17)]
 
@@ -115,7 +120,7 @@ def serialize_service(service):
         "price_label": format_service_price(service.price),
         "rating": service.rating,
         "image_url": service.image_url,
-        "status": service.status,
+        "status": service.get_status_display(),
     }
 
 # ĐÃ CẬP NHẬT ĐỂ BƠM DATA CHO POPUP 2 CỘT BÊN HTML
@@ -249,65 +254,9 @@ def user_logout(request):
 
 @manager_required
 def service_dashboard(request):
-    services = [
-        {
-            "name": "Chăm sóc da mặt cao cấp",
-            "description": "Liệu trình chăm sóc chuyên sâu với công nghệ Hàn Quốc",
-            "price": "1.000.000",
-            "status": "Hoạt động",
-            "image_class": "peach",
-            "image_url": "https://tourdanangcity.vn/wp-content/uploads/2024/06/review-spa-hoi-an.jpg",
-        },
-        {
-            "name": "Massage body thư giãn",
-            "description": "Massage toàn thân với tinh dầu thiên nhiên",
-            "price": "800.000",
-            "status": "Hoạt động",
-            "image_class": "amber",
-            "image_url": "https://dynamic-media-cdn.tripadvisor.com/media/photo-o/12/63/9f/04/sakura-massage-spa.jpg?w=900&h=500&s=1",
-        },
-        {
-            "name": "Triệt lông công nghệ Diode",
-            "description": "Công nghệ triệt lông vĩnh viễn an toàn",
-            "price": "800.000",
-            "status": "Hoạt động",
-            "image_class": "sun",
-            "image_url": "https://images.virginexperiencedays.co.uk/images/product/large/mychocolate-chocoholic-workshop-with-29145629.jpg?auto=compress%2Cformat&w=1440&q=80&fit=max",
-        },
-        {
-            "name": "Gội đầu dưỡng sinh",
-            "description": "Liệu trình chăm sóc tóc và da đầu",
-            "price": "300.000",
-            "status": "Hoạt động",
-            "image_class": "sea",
-            "image_url": "https://static.vinwonders.com/production/2025/09/spa-ha-noi-topbanner.jpg",
-        },
-        {
-            "name": "Trị mụn chuyên sâu",
-            "description": "Làm sạch, lấy nhân mụn, phục hồi da",
-            "price": "800.000",
-            "status": "Hoạt động",
-            "image_class": "rose",
-            "image_url": "https://static.hotdeal.vn/images/1535/1534508/60x60/349662-dang-cap-massage-bau-5-thu-gian-toan-than-cho-me-khoe-be-thong-minh-tai-bloomy-spa.jpg",
-        },
-        {
-            "name": "Acne Detox Therapy",
-            "description": "Thanh lọc da mụn, làm sạch sâu lỗ chân lông",
-            "price": "950.000",
-            "status": "Hoạt động",
-            "image_class": "mint",
-            "image_url": "https://file.hstatic.net/200000827051/article/facial_treatment_f73cebb667794301afd01348897774e7.jpg",
-        },
-        {
-            "name": "Post-Acne Recovery Therapy",
-            "description": "Phục hồi da sau mụn, giảm thâm sẹo",
-            "price": "1.200.000",
-            "status": "Hoạt động",
-            "image_class": "violet",
-            "image_url": "https://hd1.hotdeal.vn/images/uploads/2016/Thang%208/31/285824/285824-dung-spa-body%20%289%29.jpg",
-        },
-    ]
-    return render(request, "service_dashboard.html", {"services": services})
+    # LẤY DỮ LIỆU THẬT TỪ DATABASE
+    services = Service.objects.all()
+    return render(request, 'service_dashboard.html', {'services': services})
 
 
 @manager_required
@@ -1122,7 +1071,7 @@ def booking_page(request):
         booking_time_raw = request.POST.get("booking_time")
 
         try:
-            service = Service.objects.get(id=service_id, status=Service.STATUS_ACTIVE)
+            service = Service.objects.get(id=service_id, status="Hoạt động")
             booking_date = datetime.strptime(booking_date_raw, "%Y-%m-%d").date()
             booking_time = datetime.strptime(booking_time_raw, "%H:%M").time()
         except Exception:
@@ -1412,16 +1361,17 @@ def booking_slots(request):
 def see_service(request):
     services = [
         serialize_service(service)
+        # Thay thế bằng "Hoạt động"
         for service in Service.objects.filter(status=Service.STATUS_ACTIVE)
     ]
     return render(request, "see_service.html", {"services": services})
 
-
 def service_detail(request, slug):
-    service = get_object_or_404(Service, slug=slug, status=Service.STATUS_ACTIVE)
+    service = get_object_or_404(Service, slug=slug, status="Hoạt động")
     related_services = [
         serialize_service(item)
-        for item in Service.objects.filter(status=Service.STATUS_ACTIVE, category=service.category)
+
+        for item in Service.objects.filter(status="Hoạt động", category=service.category)
         .exclude(pk=service.pk)[:3]
     ]
     return render(
@@ -1542,3 +1492,103 @@ def public_review_page(request):
     }
     return render(request, "public_reviews.html", context)
 
+
+@require_POST
+def api_update_price(request):
+    try:
+        service_id = request.POST.get('service_id')
+        new_price_str = request.POST.get('new_price', '0')
+
+        if not new_price_str.strip(): new_price_str = '0'
+        new_price = int(new_price_str.replace('.', '').replace(',', '').strip())
+
+        service = get_object_or_404(Service, id=service_id)
+        service.price = new_price
+
+        # LƯU DATABASE THẬT
+        service.save()
+
+        formatted_price = f"{new_price:,}".replace(',', '.')
+        return JsonResponse({
+            'status': 'success',
+            'new_price_formatted': formatted_price,
+            'raw_price': new_price
+        })
+    except Exception as e:
+        print("=== LỖI UPDATE GIÁ ===", repr(e))
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@require_POST
+def api_update_service(request):
+    try:
+        service_id = request.POST.get('service_id')
+        name = request.POST.get('name')
+        description = request.POST.get('description')
+        image = request.FILES.get('image')
+
+        service = get_object_or_404(Service, id=service_id)
+        if name:
+            service.name = name
+        if description:
+            service.description = description
+            service.short_description = description[:100] + '...' if len(description)>100 else description
+
+        if image:
+            service.image_url = image
+
+        # ĐÂY LÀ DÒNG CHỐNG LỖI F5 BỊ MẤT DỮ LIỆU
+        service.save()
+
+        return JsonResponse({
+            'status': 'success',
+            'new_name': service.name,
+            'new_desc': service.description,
+        })
+    except Exception as e:
+        print("=== LỖI UPDATE INFO ===", repr(e))
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+@require_POST
+def api_create_service(request):
+    try:
+        name = request.POST.get('name', '').strip()
+        description = request.POST.get('description', '').strip()
+        price_str = request.POST.get('price', '0')
+        image = request.FILES.get('image')
+
+        if not name:
+            raise ValueError("Tên dịch vụ không được để trống")
+
+        if not price_str.strip(): price_str = '0'
+        new_price = int(price_str.replace('.', '').replace(',', '').strip())
+
+        base_slug = slugify(name) or "dich-vu"
+        safe_slug = f"{base_slug}-{uuid.uuid4().hex[:6]}"
+
+        # Trích xuất 100 ký tự đầu làm mô tả ngắn
+        short_desc = description[:100] + '...' if len(description) > 100 else description
+
+        # TẠO VÀ LƯU DATABASE THẬT
+        service = Service(
+            name=name,
+            slug=safe_slug,
+            short_description=short_desc,
+            description=description,
+            price=new_price,
+            category=getattr(Service, 'CATEGORY_FACE', 'face'),
+            duration_minutes=60,
+            status=getattr(Service, 'STATUS_ACTIVE', 'active'),
+            rating=5.0
+        )
+
+        # FIX LỖI 400 KHI KHÔNG UPLOAD ẢNH:
+        if image:
+            service.image_url = image
+            # Nếu model của bạn bắt buộc có ảnh, có thể thêm else: service.image_url = "default.jpg"
+
+        service.save()
+        return JsonResponse({'status': 'success'})
+
+    except Exception as e:
+        print("=== LỖI CREATE ===", repr(e))
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

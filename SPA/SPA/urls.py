@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import path
 from services.views import public_reviews
+from . import views
 
 from .views import (
     home_entry,
@@ -61,4 +62,7 @@ urlpatterns = [
     path('khach-hang/<int:customer_id>/', customer_detail),
 
     path('admin/', admin.site.urls),
+path('api/services/create/', views.api_create_service, name='api_create_service'),
+    path('api/services/update/', views.api_update_service, name='api_update_service'),
+    path('api/services/update-price/', views.api_update_price, name='api_update_price'),
 ]

@@ -70,6 +70,7 @@
                         </div>
                         <div class="service-grid" id="serviceGrid">
                             {% for service in services %}
+                            <!-- PHỤC HỒI ĐẦY ĐỦ CÁC DATA-ATTRIBUTE CỦA BẠN -->
                             <button
                                 class="service-card"
                                 type="button"
@@ -187,7 +188,6 @@
                     </div>
                 </div>
 
-                <!-- Đã xóa panel lịch sử đặt lịch để chỉ giữ lại luồng đặt lịch mới -->
             </section>
         </main>
 
@@ -229,7 +229,6 @@
         </footer>
     </div>
 
-    <!-- FORM ẨN ĐỂ GỬI DỮ LIỆU THẬT VỀ BACKEND -->
 <form id="booking-submit-form" method="post" action="{% url 'booking' %}" hidden>
     {% csrf_token %}
     <input type="hidden" name="service_id" id="booking-service-id">

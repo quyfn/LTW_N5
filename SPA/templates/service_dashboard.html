@@ -34,34 +34,25 @@
                             <th>Thao tác</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="service-table-body">
                         {% for service in services %}
-                        <tr>
+                        <tr data-service-id="{{ service.id }}">
                             <td>
                                 <div class="service-cell">
                                     <div class="service-thumb {{ service.image_class }}">
                                         {% if service.image_url %}
-                                        <img
-                                            src="{{ service.image_url }}"
-                                            alt="{{ service.name }}"
-                                            width="42"
-                                            height="42"
-                                            loading="lazy"
-                                            referrerpolicy="no-referrer"
-                                            style="width:100%;height:100%;object-fit:cover;display:block;"
-                                            onerror="this.onerror=null;this.src='{% static 'images/service-fallback.svg' %}';"
-                                        >
+                                        <img src="{{ service.image_url }}" alt="{{ service.name }}" width="42" height="42" loading="lazy" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.onerror=null;this.src='{% static 'images/service-fallback.svg' %}';">
                                         {% endif %}
                                     </div>
-                                    <span>{{ service.name }}</span>
+                                    <span class="js-service-name">{{ service.name }}</span>
                                 </div>
                             </td>
-                            <td>{{ service.description }}</td>
-                            <td>{{ service.price }}</td>
-                            <td><span class="status-pill">{{ service.status }}</span></td>
+                            <td class="js-service-desc">{{ service.description }}</td>
+                            <td class="js-service-price" data-raw-price="{{ service.raw_price }}">{{ service.price }}</td>
+                            <td><span class="status-pill">{{ service.get_status_display }}</span></td>
                             <td>
                                 <div class="action-group">
-                                    <button class="icon-btn" data-modal-target="edit-service-modal" aria-label="Sửa">
+                                    <button class="icon-btn edit-trigger" data-id="{{ service.id }}" data-modal-target="edit-service-modal" aria-label="Sửa">
                                         <span class="pencil-icon" aria-hidden="true"></span>
                                     </button>
                                 </div>
@@ -78,35 +69,20 @@
                 <h3>Mai Trâm Spa</h3>
                 <p>Nơi vẻ đẹp thăng hoa - Chăm sóc sắc đẹp toàn diện với công nghệ hiện đại và đội ngũ chuyên gia hàng đầu.</p>
                 <div class="socials">
-                    <a href="#" aria-label="Facebook">f</a>
-                    <a href="#" aria-label="Instagram">ig</a>
-                    <a href="#" aria-label="Tumblr">t</a>
+                    <a href="#" aria-label="Facebook">f</a><a href="#" aria-label="Instagram">ig</a><a href="#" aria-label="Tumblr">t</a>
                 </div>
             </section>
-
             <section class="footer-col">
                 <h3>Dịch vụ</h3>
-                <p>Chăm sóc da mặt</p>
-                <p>Massage body</p>
-                <p>Triệt lông</p>
-                <p>Điều trị mụn</p>
-                <p>Tắm trắng</p>
+                <p>Chăm sóc da mặt</p><p>Massage body</p><p>Triệt lông</p><p>Điều trị mụn</p><p>Tắm trắng</p>
             </section>
-
             <section class="footer-col">
                 <h3>Về chúng tôi</h3>
-                <p>Giới thiệu</p>
-                <p>Đội ngũ</p>
-                <p>Tin tức</p>
-                <p>Liên hệ</p>
-                <p>Tuyển dụng</p>
+                <p>Giới thiệu</p><p>Đội ngũ</p><p>Tin tức</p><p>Liên hệ</p><p>Tuyển dụng</p>
             </section>
-
             <section class="footer-col">
                 <h3>Liên hệ</h3>
-                <p>104/7 Lê Đình Lý, Thanh Khê, Đà Nẵng</p>
-                <p>0901 234 589</p>
-                <p>info@maitram.spa</p>
+                <p>104/7 Lê Đình Lý, Thanh Khê, Đà Nẵng</p><p>0901 234 589</p><p>info@maitram.spa</p>
             </section>
         </footer>
     </div>
@@ -116,34 +92,22 @@
     <section class="modal hidden modal-large" id="add-service-modal" aria-hidden="true">
         <div class="modal-panel">
             <h3>Thêm Dịch Vụ</h3>
-            <form class="service-form" data-form-type="add-service">
-                <label>
-                    <span>Tên dịch vụ</span>
-                    <input type="text" name="name" placeholder="VD: Peel da thanh lọc">
-                </label>
-                <label>
-                    <span>Mô tả</span>
-                    <textarea name="description" rows="5" placeholder="Mô tả chi tiết về dịch vụ..."></textarea>
-                </label>
-                <label class="short-field">
-                    <span>Giá thực hiện (VND)</span>
-                    <input type="text" name="price" placeholder="VD: 900.000">
-                </label>
+            <form id="add-service-form" class="service-form" data-form-type="add-service">
+                {% csrf_token %}
+                <label><span>Tên dịch vụ</span><input type="text" name="name" placeholder="VD: Peel da thanh lọc"></label>
+                <label><span>Mô tả</span><textarea name="description" rows="5" placeholder="Mô tả chi tiết về dịch vụ..."></textarea></label>
+                <label class="short-field"><span>Giá thực hiện (VND)</span><input type="text" name="price" placeholder="VD: 900.000"></label>
                 <div class="upload-box">
                     <span>Hình ảnh dịch vụ</span>
                     <input class="upload-input" id="add-service-image" type="file" name="image" accept="image/png,image/jpeg,image/webp" hidden>
                     <label class="upload-dropzone" for="add-service-image">
-                        <div class="upload-icon" aria-hidden="true">
-                            <span class="upload-plus"></span>
-                        </div>
+                        <div class="upload-icon" aria-hidden="true"><span class="upload-plus"></span></div>
                         <div class="upload-copy">
                             <strong>Thêm ảnh vào</strong>
                             <p>Nhấp để chọn ảnh thật<br>PNG, JPG hoặc WEBP (tối đa 5MB)</p>
                             <span class="upload-file-name" data-file-name>Chưa chọn tệp nào</span>
                         </div>
-                        <div class="upload-preview hidden" data-upload-preview>
-                            <img src="" alt="Xem trước ảnh dịch vụ">
-                        </div>
+                        <div class="upload-preview hidden" data-upload-preview><img src="" alt="Xem trước ảnh dịch vụ"></div>
                     </label>
                 </div>
                 <div class="modal-actions">
@@ -157,34 +121,23 @@
     <section class="modal hidden modal-large" id="edit-service-modal" aria-hidden="true">
         <div class="modal-panel">
             <h3>Sửa Thông Tin Dịch Vụ</h3>
-            <form class="service-form" data-form-type="edit-service">
-                <label>
-                    <span>Tên dịch vụ</span>
-                    <input type="text" name="name" value="Chăm sóc da mặt cao cấp">
-                </label>
-                <label>
-                    <span>Mô tả</span>
-                    <textarea name="description" rows="5">Liệu trình chăm sóc da chuyên sâu với công nghệ Hàn Quốc</textarea>
-                </label>
-                <label class="short-field">
-                    <span>Giá thực hiện (VND)</span>
-                    <input type="text" name="price" value="1.000.000">
-                </label>
+            <form id="edit-service-form" class="service-form" data-form-type="edit-service">
+                {% csrf_token %}
+                <input type="hidden" name="service_id" id="edit-service-id">
+                <label><span>Tên dịch vụ</span><input type="text" name="name"></label>
+                <label><span>Mô tả</span><textarea name="description" rows="5"></textarea></label>
+                <label class="short-field"><span>Giá thực hiện (VND)</span><input type="text" name="price"></label>
                 <div class="upload-box">
                     <span>Hình ảnh dịch vụ</span>
                     <input class="upload-input" id="edit-service-image" type="file" name="image" accept="image/png,image/jpeg,image/webp" hidden>
                     <label class="upload-dropzone" for="edit-service-image">
-                        <div class="upload-icon" aria-hidden="true">
-                            <span class="upload-plus"></span>
-                        </div>
+                        <div class="upload-icon" aria-hidden="true"><span class="upload-plus"></span></div>
                         <div class="upload-copy">
                             <strong>Thêm ảnh vào</strong>
                             <p>Nhấp để chọn ảnh thật<br>PNG, JPG hoặc WEBP (tối đa 5MB)</p>
                             <span class="upload-file-name" data-file-name>Chưa chọn tệp nào</span>
                         </div>
-                        <div class="upload-preview hidden" data-upload-preview>
-                            <img src="" alt="Xem trước ảnh dịch vụ">
-                        </div>
+                        <div class="upload-preview hidden" data-upload-preview><img src="" alt="Xem trước ảnh dịch vụ"></div>
                     </label>
                 </div>
                 <div class="modal-actions three-actions">
@@ -199,22 +152,12 @@
     <section class="modal hidden modal-small" id="update-price-modal" aria-hidden="true">
         <div class="modal-panel compact">
             <h3>Cập Nhật Giá</h3>
-            <form class="service-form compact-form" data-form-type="update-price">
-                <label>
-                    <span>Giá hiện tại</span>
-                    <input type="text" name="current_price" value="1.000.000">
-                </label>
-                <label>
-                    <span>Giá mới</span>
-                    <input type="text" name="new_price" value="1.200.000">
-                </label>
-                <label>
-                    <span>Ngày bắt đầu</span>
-                    <div class="date-input">
-                        <input type="text" value="14/2/2025">
-                        <span>CAL</span>
-                    </div>
-                </label>
+            <form id="update-price-form" class="service-form compact-form" data-form-type="update-price">
+                {% csrf_token %}
+                <input type="hidden" name="service_id" id="update-price-id">
+                <label><span>Giá hiện tại</span><input type="text" name="current_price" readonly></label>
+                <label><span>Giá mới</span><input type="text" name="new_price" required></label>
+                <label><span>Ngày bắt đầu</span><div class="date-input"><input type="text" value="" readonly><span>CAL</span></div></label>
                 <div class="modal-actions">
                     <button type="button" class="secondary-btn" data-close-modal>Hủy</button>
                     <button type="submit" class="primary-btn">Cập Nhật</button>
@@ -223,70 +166,16 @@
         </div>
     </section>
 
-    <section class="modal hidden modal-alert" id="error-empty-name" aria-hidden="true">
-        <div class="modal-panel alert-panel">
-            <div class="alert-icon">!</div>
-            <p>Tên dịch vụ còn trống. Vui lòng nhập tên dịch vụ.</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
+    <!-- Các Modal Cảnh báo (Giữ nguyên) -->
+    <section class="modal hidden modal-alert" id="error-empty-name" aria-hidden="true"><div class="modal-panel alert-panel"><div class="alert-icon">!</div><p>Tên dịch vụ còn trống.</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
+    <section class="modal hidden modal-alert" id="error-empty-description" aria-hidden="true"><div class="modal-panel alert-panel"><div class="alert-icon">!</div><p>Mô tả còn trống.</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
+    <section class="modal hidden modal-alert" id="error-invalid-price" aria-hidden="true"><div class="modal-panel alert-panel"><div class="alert-icon">!</div><p>Giá dịch vụ phải lớn hơn 0.</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
+    <section class="modal hidden modal-alert" id="error-duplicate-service" aria-hidden="true"><div class="modal-panel alert-panel"><div class="alert-icon">!</div><p>Dịch vụ đã tồn tại !</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
+    <section class="modal hidden modal-alert" id="error-invalid-image-type" aria-hidden="true"><div class="modal-panel alert-panel"><div class="alert-icon">!</div><p>Hình ảnh không đúng định dạng !</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
+    <section class="modal hidden modal-alert" id="error-image-too-large" aria-hidden="true"><div class="modal-panel alert-panel"><div class="alert-icon">!</div><p>Hình ảnh vượt quá dung lượng !</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
+    <section class="modal hidden modal-alert" id="error-empty-list" aria-hidden="true"><div class="modal-panel alert-panel"><div class="alert-icon">!</div><p>Thao tác thất bại. Vui lòng thử lại.</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
+    <section class="modal hidden modal-alert" id="success-save-service" aria-hidden="true"><div class="modal-panel alert-panel success-panel"><div class="success-icon"></div><p>Lưu thành công!</p><button type="button" class="primary-btn" data-close-modal>Đóng</button></div></section>
 
-    <section class="modal hidden modal-alert" id="error-empty-description" aria-hidden="true">
-        <div class="modal-panel alert-panel">
-            <div class="alert-icon">!</div>
-            <p>Mô tả còn trống. Vui lòng nhập lại.</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
-
-    <section class="modal hidden modal-alert" id="error-invalid-price" aria-hidden="true">
-        <div class="modal-panel alert-panel">
-            <div class="alert-icon">!</div>
-            <p>Giá dịch vụ phải lớn hơn 0. Vui lòng nhập lại.</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
-
-    <section class="modal hidden modal-alert" id="error-duplicate-service" aria-hidden="true">
-        <div class="modal-panel alert-panel">
-            <div class="alert-icon">!</div>
-            <p>Dịch vụ đã tồn tại !</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
-
-    <section class="modal hidden modal-alert" id="error-invalid-image-type" aria-hidden="true">
-        <div class="modal-panel alert-panel">
-            <div class="alert-icon">!</div>
-            <p>Hình ảnh không đúng định dạng !</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
-
-    <section class="modal hidden modal-alert" id="error-image-too-large" aria-hidden="true">
-        <div class="modal-panel alert-panel">
-            <div class="alert-icon">!</div>
-            <p>Hình ảnh vượt quá dung lượng cho phép !</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
-
-    <section class="modal hidden modal-alert" id="error-empty-list" aria-hidden="true">
-        <div class="modal-panel alert-panel">
-            <div class="alert-icon">!</div>
-            <p>Không thể tải danh sách dịch vụ. Vui lòng thử lại sau.</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
-
-    <section class="modal hidden modal-alert" id="success-save-service" aria-hidden="true">
-        <div class="modal-panel alert-panel success-panel">
-            <div class="success-icon"></div>
-            <p>Lưu thành công!</p>
-            <button type="button" class="primary-btn" data-close-modal>Đóng</button>
-        </div>
-    </section>
-
-    <script src="{% static 'js/service-dashboard.js' %}?v=6"></script>
+    <script src="{% static 'js/service-dashboard.js' %}?v=7"></script>
 </body>
 </html>

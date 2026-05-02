@@ -11,7 +11,6 @@
 {% include 'includes/customer_navbar.html' %}
     <div class="page-shell">
 
-
         <main class="main-content">
             <section class="filter-bar">
                 <div class="search-box">
@@ -38,7 +37,8 @@
 
             <section class="services" id="serviceList">
                 {% for service in services %}
-                <article class="card" data-category="{{ service.category }}" data-price="{{ service.price }}" data-name="{{ service.name }}">
+                <!-- Trả lại đầy đủ data-attribute để JS bộ lọc hoạt động -->
+                <article class="card" data-service-id="{{ service.id }}" data-category="{{ service.category }}" data-price="{{ service.price }}" data-name="{{ service.name }}">
                     <img src="{{ service.image_url }}" alt="{{ service.name }}">
                     <div class="card-body">
                         <div class="card-head">
@@ -50,7 +50,7 @@
                             <span>{{ service.duration_minutes }} phút</span>
                         </div>
                         <div class="card-footer">
-                            <strong>Từ {{ service.price_label }}đ</strong>
+                            <strong class="js-price-sync">Từ {{ service.price_label }}đ</strong>
                             <a href="{% url 'service_detail' service.slug %}">Xem chi tiết <span>&rarr;</span></a>
                         </div>
                     </div>
