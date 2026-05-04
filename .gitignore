@@ -3,10 +3,10 @@
 *.pyc
 *.pyo
 *.pyd
-*.sqlite3
 
-# Local Django database in this repo
-SPA/db.sqlite3
+# SQLite databases
+*.sqlite3
+!SPA/db.sqlite3
 
 # Virtual environments
 .venv/
