@@ -110,11 +110,15 @@ class Review(models.Model):
         ('shop', 'Đánh giá Spa'),
     )
     name = models.CharField(max_length=100)
+    customer = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reviews')
+    booking = models.OneToOneField('Booking', on_delete=models.SET_NULL, null=True, blank=True, related_name='review')
     review_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default='service')
     service = models.CharField(max_length=100, blank=True, null=True) # Tên dịch vụ (VD: Chăm sóc da)
     rating = models.IntegerField(default=5)
     content = models.TextField()
     time = models.DateTimeField(default=timezone.now)
+    status = models.CharField(max_length=30, default='Chưa phản hồi')
+    reply_content = models.TextField(blank=True)
     # Giả sử mày lưu link ảnh bằng JSON hoặc một trường Text
     image_urls = models.JSONField(blank=True, null=True)
 

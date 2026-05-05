@@ -25,7 +25,6 @@ def public_reviews(request):
         'reviews': reviews,
         'total_reviews': total_reviews,
         'average_rating': average_rating,
-        'with_images': reviews.exclude(image_urls__isnull=True).exclude(image_urls=[]).count(),
         'star_5_count': stars[5], 'star_5_percent': get_percent(stars[5], total_reviews),
         'star_4_count': stars[4], 'star_4_percent': get_percent(stars[4], total_reviews),
         'star_3_count': stars[3], 'star_3_percent': get_percent(stars[3], total_reviews),

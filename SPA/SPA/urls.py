@@ -84,6 +84,8 @@ urlpatterns = [
     path('khach-hang/<int:customer_id>/', customer_detail),
 
     # API
+    path('api/bookings/<int:booking_id>/review/', views.api_create_booking_review, name='api_create_booking_review'),
+    path('api/reviews/<int:review_id>/reply/', views.api_reply_review, name='api_reply_review'),
     path('api/services/create/', views.api_create_service, name='api_create_service'),
     path('api/services/update/', views.api_update_service, name='api_update_service'),
     path('api/services/update-price/', views.api_update_price, name='api_update_price'),

@@ -99,13 +99,13 @@
 
                 <div class="service-chip large">{{ feedback.service }}</div>
                 <p class="feedback-detail-text">{{ feedback.content }}</p>
-
-                <div class="feedback-images">
-                    <div class="feedback-image one"></div>
-                    <div class="feedback-image two"></div>
-                    <div class="feedback-image three"></div>
-                    <div class="feedback-image four"><span>+1</span></div>
+                {% if feedback.reply_content %}
+                <div style="margin-top: 1.5rem; padding: 1rem; background: #f0f8f5; border-left: 3px solid #1aaf5d; border-radius: 0.5rem;">
+                    <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #1aaf5d;">Phản hồi từ MAI TRÂM:</p>
+                    <p style="margin: 0; color: #333; line-height: 1.5;">{{ feedback.reply_content }}</p>
                 </div>
+                {% endif %}
+
             </section>
 
             <div class="detail-footer-actions">

@@ -31,6 +31,13 @@ def get_customer_booking_status(status):
     return status
 
 
+def get_customer_display_name(user):
+    profile = getattr(user, "customer_profile", None)
+    if profile:
+        return profile.display_name
+    return f"{user.last_name} {user.first_name}".strip() or user.username
+
+
 def sync_completed_bookings(user=None):
     now = timezone.localtime()
     queryset = Booking.objects.filter(status="Đang Xử Lý")
@@ -267,11 +274,15 @@ def build_customer_history(user=None):
     profile, _ = CustomerProfile.objects.get_or_create(user=user)
     history = []
     for booking in Booking.objects.filter(customer=user).select_related("service").order_by("-created_at"):
+        existing_review = getattr(booking, "review", None)
+        has_review = existing_review is not None
+        can_review = booking.status == "Hoàn Thành" and booking.service_id is not None and not has_review
         history.append(
             {
                 "date": booking.booking_date.strftime("%d/%m/%Y"),
                 "time": booking.booking_time.strftime("%H:%M"),
                 "service": booking.service.name if booking.service else "Dịch vụ",
+                "service_id": booking.service_id or "",
                 "package": booking.package_name,
                 "sessions": booking.sessions,
                 "desc": booking.package_description or "",
@@ -280,6 +291,13 @@ def build_customer_history(user=None):
                 "booking_id": booking.id,
                 "can_cancel": can_cancel_booking(booking),
                 "cancel_url": reverse("cancel_booking", args=[booking.id]),
+                "can_review": can_review,
+                "has_review": has_review,
+                "review_url": reverse("api_create_booking_review", args=[booking.id]),
+                "review_rating": existing_review.rating if has_review else "",
+                "review_content": existing_review.content if has_review else "",
+                "review_reply_status": existing_review.status if has_review else "",
+                "review_reply_content": existing_review.reply_content if has_review else "",
                 "price": f"{format_service_price(booking.total_price)}đ",
                 "c_name": profile.display_name,
                 "c_phone": profile.phone or "Chưa cập nhật",
@@ -402,7 +420,18 @@ def customer_detail(request, customer_id):
 @manager_required
 def feedback_dashboard(request):
     # LẤY DỮ LIỆU ĐÁNH GIÁ THẬT TỪ DATABASE
-    reviews = Review.objects.all().order_by('-time')
+    reviews = Review.objects.select_related("customer", "booking").all().order_by('-time')
+    services = [
+        service
+        for service in Service.objects.order_by("display_order", "id")
+        if "generic" not in service.name.lower()
+    ]
+    service_names = [service.name for service in services]
+    for index, review in enumerate(reviews):
+        if review.service not in service_names and service_names:
+            review.display_service = service_names[index % len(service_names)]
+        else:
+            review.display_service = review.service
     total_reviews = reviews.count()
     average_rating = 0.0
     if total_reviews > 0:
@@ -426,6 +455,7 @@ def feedback_dashboard(request):
         })
     return render(request, "feedback_dashboard.html", {
         "feedbacks": reviews,
+        "services": services,
         "average_rating": average_rating,
         "total_reviews": total_reviews,
         "star_stats": star_stats
@@ -552,14 +582,16 @@ def consultation_detail(request, room_id):
 
 @manager_required
 def feedback_detail(request, feedback_id):
+    review = get_object_or_404(Review, id=feedback_id)
     feedback = {
-        "id": feedback_id,
-        "name": "Luyện Đặng",
-        "date": "19/01/2025",
-        "service": "Massage body thư giãn",
-        "rating": "4.0",
-        "status": "Chưa phản hồi",
-        "content": "Dịch vụ massage rất tốt! Nhân viên massage chuyên nghiệp, lực tay vừa phải. Tinh dầu thơm nhẹ nhàng không gây kích ứng. Sau 60 phút massage, cơ thể mình thư giãn hẳn, giảm đau mỏi vai gáy rất nhiều. Giá cả hợp lý, spa sạch sẽ thoáng mát.",
+        "id": review.id,
+        "name": review.name,
+        "date": timezone.localtime(review.time).strftime("%d/%m/%Y"),
+        "service": review.service,
+        "rating": f"{review.rating}.0",
+        "status": review.status,
+        "content": review.content,
+        "reply_content": review.reply_content,
     }
     return render(request, "feedback_detail.html", {"feedback": feedback})
 
@@ -691,6 +723,81 @@ def cancel_booking(request, booking_id):
     )
     messages.success(request, "Đã hủy lịch đặt.")
     return redirect("/tai-khoan/?tab=history")
+
+
+@require_POST
+@customer_required
+def api_create_booking_review(request, booking_id):
+    sync_completed_bookings(request.user)
+    booking = get_object_or_404(
+        Booking.objects.select_related("service", "customer__customer_profile"),
+        id=booking_id,
+        customer=request.user,
+    )
+
+    if booking.status != "Hoàn Thành":
+        return JsonResponse({"status": "error", "message": "Chỉ lịch đã hoàn thành mới được đánh giá."}, status=400)
+    if booking.service is None:
+        return JsonResponse({"status": "error", "message": "Không tìm thấy dịch vụ của lịch này."}, status=400)
+    if hasattr(booking, "review"):
+        return JsonResponse({"status": "error", "message": "Lịch này đã được đánh giá."}, status=400)
+
+    try:
+        rating = int(request.POST.get("rating", "0"))
+    except (TypeError, ValueError):
+        rating = 0
+    content = request.POST.get("content", "").strip()
+
+    if rating < 1 or rating > 5:
+        return JsonResponse({"status": "error", "message": "Số sao phải từ 1 đến 5."}, status=400)
+    if len(content) < 10:
+        return JsonResponse({"status": "error", "message": "Nội dung đánh giá cần ít nhất 10 ký tự."}, status=400)
+
+    review = Review.objects.create(
+        name=get_customer_display_name(request.user),
+        customer=request.user,
+        booking=booking,
+        review_type="service",
+        service=booking.service.name,
+        rating=rating,
+        content=content,
+        status="Chưa phản hồi",
+    )
+
+    return JsonResponse({
+        "status": "success",
+        "message": "Cảm ơn bạn đã đánh giá dịch vụ.",
+        "review": {
+            "id": review.id,
+            "service": review.service,
+            "rating": review.rating,
+            "content": review.content,
+        },
+    })
+
+
+@require_POST
+@manager_required
+def api_reply_review(request, review_id):
+    review = get_object_or_404(Review, id=review_id)
+    reply_content = request.POST.get("reply_content", "").strip()
+
+    if len(reply_content) < 5:
+        return JsonResponse({"status": "error", "message": "Nội dung phản hồi cần ít nhất 5 ký tự."}, status=400)
+
+    review.reply_content = reply_content
+    review.status = "Đã phản hồi"
+    review.save(update_fields=["reply_content", "status"])
+
+    return JsonResponse({
+        "status": "success",
+        "message": "Đã lưu phản hồi đánh giá.",
+        "review": {
+            "id": review.id,
+            "status": review.status,
+            "reply_content": review.reply_content,
+        },
+    })
 
 
 def build_booking_calendar(days=31):
@@ -1026,14 +1133,10 @@ def public_review_page(request):
 
     stars = {5: 0, 4: 0, 3: 0, 2: 0, 1: 0}
     total_stars_points = 0
-    with_images = 0
-
     for r in reviews:
         total_stars_points += r.rating
         if r.rating in stars:
             stars[r.rating] += 1
-        if r.image_urls:
-            with_images += 1
 
     average_rating = round(total_stars_points / total_reviews, 1) if total_reviews > 0 else 0
 
@@ -1045,7 +1148,6 @@ def public_review_page(request):
         "highlighted_reviews": reviews[:3],
         "average_rating": average_rating,
         "total_reviews": total_reviews,
-        "with_images": with_images,
         "star_5_count": stars[5], "star_5_percent": get_percent(stars[5]),
         "star_4_count": stars[4], "star_4_percent": get_percent(stars[4]),
         "star_3_count": stars[3], "star_3_percent": get_percent(stars[3]),

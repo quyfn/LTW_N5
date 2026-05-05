@@ -39,7 +39,7 @@
 
     <main class="page-shell">
         <div class="container">
-            <!-- 3 CỤC THỐNG KÊ NGANG -->
+            <!-- THỐNG KÊ ĐÁNH GIÁ -->
             <section class="stats-strip">
                 <article class="stat-card">
                     <span class="stat-label">Điểm trung bình</span>
@@ -48,10 +48,6 @@
                 <article class="stat-card">
                     <span class="stat-label">Tổng đánh giá</span>
                     <strong>{{ total_reviews }}</strong>
-                </article>
-                <article class="stat-card" id="filterImagesBtn" style="cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='none'">
-                    <span class="stat-label">Đánh giá có ảnh</span>
-                    <strong>{{ with_images }}</strong>
                 </article>
             </section>
 
@@ -169,7 +165,6 @@
             const originalTitle = sectionTitle ? sectionTitle.innerHTML : "Bảng đánh giá chi tiết";
 
             let visibleCount = 4; // Mặc định 4 bài
-            let imageFilterActive = false;
             let activeTab = 'service';
 
             function updateReviewDisplay() {
@@ -180,9 +175,7 @@
                     const matchTab = card.dataset.type === activeTab;
                     const matchStar = (starVal === 'all') || (card.dataset.star === starVal);
                     const matchService = (serviceVal === 'all') || (card.dataset.service && card.dataset.service.includes(serviceVal));
-                    const matchImage = imageFilterActive ? card.querySelector('.review-gallery') !== null : true;
-
-                    return matchTab && matchStar && matchService && matchImage;
+                    return matchTab && matchStar && matchService;
                 });
 
                 allCards.forEach(card => card.style.display = 'none');
@@ -220,27 +213,6 @@
                 loadMoreBtn.addEventListener('click', () => {
                     visibleCount += 4;
                     updateReviewDisplay();
-                });
-            }
-
-            // Sự kiện click "Đánh giá có ảnh"
-            const filterImagesBtn = document.getElementById('filterImagesBtn');
-            if (filterImagesBtn) {
-                filterImagesBtn.addEventListener('click', () => {
-                    document.getElementById('review-list').scrollIntoView({ behavior: 'smooth' });
-
-                    imageFilterActive = true;
-                    visibleCount = 4;
-                    updateReviewDisplay();
-
-                    sectionTitle.innerHTML = `Đánh giá có hình ảnh <span id="clearFilterBtn" style="color: var(--rose-900); font-size: 16px; cursor: pointer; margin-left: 15px; text-decoration: underline;">(Hủy lọc)</span>`;
-
-                    document.getElementById('clearFilterBtn').addEventListener('click', () => {
-                        imageFilterActive = false;
-                        visibleCount = 4;
-                        sectionTitle.innerHTML = originalTitle;
-                        updateReviewDisplay();
-                    });
                 });
             }
 

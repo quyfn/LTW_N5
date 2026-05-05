@@ -1,9 +1,9 @@
-from datetime import date
+from datetime import date, time, timedelta
 
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
-from services.models import CustomerProfile, Service
+from services.models import Booking, CustomerProfile, Service
 
 
 SERVICE_SEED = [
@@ -169,6 +169,23 @@ class Command(BaseCommand):
                         "address": "Da Nang",
                     },
                 )
+                demo_slugs = [item["slug"] for item in SERVICE_SEED[:3]]
+                completed_services = Service.objects.filter(slug__in=demo_slugs).order_by("display_order", "id")
+                for index, service in enumerate(completed_services, start=1):
+                    Booking.objects.update_or_create(
+                        customer=user,
+                        service=service,
+                        booking_date=date.today() - timedelta(days=index * 7),
+                        booking_time=time(9 + index, 0),
+                        defaults={
+                            "package_name": "Gói tiêu chuẩn",
+                            "sessions": "1 buổi",
+                            "package_description": service.short_description,
+                            "total_price": service.price,
+                            "notes": "Đơn demo đã hoàn thành để khách hàng có thể đánh giá.",
+                            "status": "Hoàn Thành",
+                        },
+                    )
 
             self.stdout.write(
                 f"User OK: {user.email} (staff={user.is_staff})"

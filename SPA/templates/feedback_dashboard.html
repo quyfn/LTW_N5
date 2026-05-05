@@ -94,17 +94,12 @@
                 </div>
 
                 <div class="filter-group service-filter">
+                    <span class="filter-label">Dịch vụ</span>
                     <select id="serviceFilter" class="service-select">
                         <option value="">Tất cả dịch vụ</option>
-                        <option value="Chăm sóc da mặt cao cấp">Chăm sóc da mặt cao cấp</option>
-                        <option value="Massage body thư giãn">Massage body thư giãn</option>
-                        <option value="Triệt lông công nghệ Diode">Triệt lông công nghệ Diode</option>
-                        <option value="Gội đầu dưỡng sinh">Gội đầu dưỡng sinh</option>
-                        <option value="Trị mụn chuyên sâu">Trị mụn chuyên sâu</option>
-                        <option value="Acne Detox Therapy">Acne Detox Therapy</option>
-                        <option value="Post-Acne Recovery Therapy">Post-Acne Recovery Therapy</option>
-                        <option value="Chăm sóc da mặt Collagen">Chăm sóc da mặt Collagen</option>
-                        <option value="Triệt lông Laser Diode">Triệt lông Laser Diode</option>
+                        {% for service in services %}
+                        <option value="{{ service.name }}">{{ service.name }}</option>
+                        {% endfor %}
                     </select>
                 </div>
             </div>
@@ -112,7 +107,7 @@
             <!-- Danh sách đánh giá -->
             <section class="feedback-grid">
                 {% for item in feedbacks %}
-                <article class="feedback-card" data-status="{% if item.status == 'Đã phản hồi' %}responded{% else %}pending{% endif %}" data-rating="{{ item.rating }}" data-service="{{ item.service }}">
+                <article class="feedback-card" data-feedback-card-id="{{ item.id }}" data-status="{% if item.status == 'Đã phản hồi' %}responded{% else %}pending{% endif %}" data-rating="{{ item.rating }}" data-service="{{ item.display_service }}">
                     <div class="feedback-head">
                         <div class="feedback-avatar {{ item.avatar_class }}"></div>
                         <div>
@@ -122,21 +117,21 @@
                     </div>
                     <div class="feedback-rating">
                         <span class="stars">
-                            {% if item.rating == "5.0" %}
+                            {% if item.rating == 5 %}
                                 ★★★★★
-                            {% elif item.rating == "4.0" %}
+                            {% elif item.rating == 4 %}
                                 ★★★★☆
-                            {% elif item.rating == "3.0" %}
+                            {% elif item.rating == 3 %}
                                 ★★★☆☆
-                            {% elif item.rating == "2.0" %}
+                            {% elif item.rating == 2 %}
                                 ★★☆☆☆
-                            {% elif item.rating == "1.0" %}
+                            {% elif item.rating == 1 %}
                                 ★☆☆☆☆
                             {% endif %}
                         </span>
                         <strong>{{ item.rating }}</strong>
                     </div>
-                    <div class="service-chip">{{ item.service }}</div>
+                    <div class="service-chip feedback-service-chip">{{ item.display_service }}</div>
                     <p class="feedback-content">
                         {{ item.content|truncatechars:120 }}
                         {% if item.content|length > 120 %}
@@ -149,7 +144,7 @@
                         <a class="secondary-btn small-btn" href="{% url 'feedback_detail' item.id %}">Xem</a>
                         {% else %}
                         <span class="status-badge yellow"><span class="icon-clock">⏰</span> {{ item.status }}</span>
-                        <button class="secondary-btn small-btn reply-btn" data-feedback-id="{{ item.id }}" data-feedback-name="{{ item.name }}">Phản hồi</button>
+                        <button class="secondary-btn small-btn reply-btn" data-feedback-id="{{ item.id }}" data-feedback-name="{{ item.name }}" data-reply-url="{% url 'api_reply_review' item.id %}">Phản hồi</button>
                         {% endif %}
                     </div>
                     {% if item.status == "Đã phản hồi" and item.reply_content %}
@@ -182,6 +177,7 @@
                 <button class="modal-close" data-close-modal style="background: none; border: none; font-size: 1.5rem; cursor: pointer;">×</button>
             </div>
             <form id="replyForm">
+                {% csrf_token %}
                 <div style="margin-bottom: 1rem;">
                     <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Khách hàng</label>
                     <input type="text" id="customerName" readonly style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 0.5rem; background: #f5f5f5;">
@@ -190,6 +186,7 @@
                     <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Nội dung phản hồi *</label>
                     <textarea id="replyContent" placeholder="Nhập phản hồi của bạn..." required style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 0.5rem; resize: vertical; min-height: 120px; font-family: inherit;"></textarea>
                 </div>
+                <div id="replyMessage" style="min-height: 20px; margin-bottom: 1rem; color: #ef4444; font-weight: 600;"></div>
                 <div style="display: flex; gap: 1rem; justify-content: flex-end;">
                     <button type="button" class="secondary-btn" data-close-modal>Hủy</button>
                     <button type="submit" class="primary-btn">Gửi phản hồi</button>
@@ -201,49 +198,59 @@
     <style>
     .review-summary-section {
         margin: 2rem 0 1.5rem 0;
+        max-width: 560px;
     }
     .review-summary-bar {
         display: flex;
         align-items: center;
-        gap: 2rem;
-        margin-bottom: 2rem;
+        gap: 2.4rem;
+        margin-bottom: 1.6rem;
         flex-wrap: wrap;
     }
     .review-stars {
-        font-size: 2.2rem;
+        font-size: 2.7rem;
         color: #ff5e9c;
         display: flex;
         align-items: center;
-        gap: 0.2rem;
+        gap: 0.28rem;
     }
     .review-average {
-        font-size: 1.5rem;
+        font-size: 2rem;
         color: #222;
-        margin-left: 1rem;
+        margin-left: 1.4rem;
         font-weight: bold;
     }
     .review-total {
-        font-size: 1.1rem;
+        font-size: 1.35rem;
         color: #888;
     }
     .star-distribution {
-        background: #f9f9f9;
-        border-radius: 0.8rem;
-        padding: 1.5rem;
-        max-width: 400px;
+        background: #ffffff;
+        border-radius: 1rem;
+        padding: 1.7rem 2rem;
+        max-width: 500px;
+        box-shadow: 0 12px 28px rgba(255, 94, 156, 0.1);
     }
     .star-row {
         display: flex;
         align-items: center;
         gap: 1rem;
-        margin-bottom: 1rem;
+        margin-bottom: 1.05rem;
     }
     .star-row:last-child {
         margin-bottom: 0;
     }
     .star-row.clickable-star:hover {
-        background: #e8e8e8;
-        border-radius: 0.5rem;
+        background: #fff1f6;
+        border-radius: 0.6rem;
+        padding: 0.5rem;
+        margin-left: -0.5rem;
+        margin-right: -0.5rem;
+        padding-left: 1rem;
+    }
+    .star-row.active-star-filter {
+        background: #fff1f6;
+        border-radius: 0.6rem;
         padding: 0.5rem;
         margin-left: -0.5rem;
         margin-right: -0.5rem;
@@ -259,20 +266,21 @@
         font-size: 0.95rem;
     }
     .star-label .star-icon {
-        font-size: 1.1rem;
+        font-size: 1.35rem;
         color: #ff5e9c;
     }
     .star-bar-container {
         flex: 1;
-        height: 8px;
+        height: 9px;
         background: #e0e0e0;
-        border-radius: 4px;
+        border-radius: 999px;
         overflow: hidden;
     }
     .star-bar {
         height: 100%;
         background: linear-gradient(90deg, #ff5e9c, #ff8fb3);
-        border-radius: 4px;
+        min-width: 3px;
+        border-radius: 999px;
         transition: width 0.3s ease;
     }
     .star-count {
@@ -292,6 +300,12 @@
         display: flex;
         gap: 0.5rem;
         flex-wrap: wrap;
+        align-items: center;
+    }
+    .filter-label {
+        color: #555;
+        font-size: 0.95rem;
+        font-weight: 700;
     }
     .service-select {
         padding: 0.6rem 1rem;
@@ -307,6 +321,22 @@
         border-color: #ff5e9c;
         outline: none;
         box-shadow: 0 0 0 3px rgba(255, 94, 156, 0.1);
+    }
+    .feedback-service-chip {
+        width: 100%;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #ff6b9f;
+        border-radius: 999px;
+        color: #ff4f8b;
+        background: #fff;
+        font-size: 1rem;
+        font-weight: 800;
+        margin: 1rem 0 0.75rem;
+        padding: 0.55rem 1rem;
+        text-align: center;
     }
     .feedback-content {
         position: relative;
@@ -412,7 +442,9 @@
         const replyForm = document.getElementById('replyForm');
         const customerNameInput = document.getElementById('customerName');
         const replyContentInput = document.getElementById('replyContent');
+        const replyMessage = document.getElementById('replyMessage');
         let currentFeedbackId = null;
+        let currentReplyUrl = null;
 
         // State filter
         let activeStatusFilter = 'all';
@@ -455,6 +487,7 @@
                 // Cập nhật nút active
                 filterButtons.forEach(btn => btn.classList.remove('active'));
                 this.classList.add('active');
+                starRows.forEach(row => row.classList.remove('active-star-filter'));
 
                 applyFilters();
             });
@@ -464,6 +497,7 @@
         serviceFilter.addEventListener('change', function() {
             activeServiceFilter = this.value;
             activeStarFilter = null; // Reset star filter
+            starRows.forEach(row => row.classList.remove('active-star-filter'));
             applyFilters();
         });
 
@@ -471,9 +505,11 @@
         starRows.forEach(row => {
             row.addEventListener('click', function() {
                 const star = this.getAttribute('data-filter-star');
-                activeStarFilter = star + '.0';
+                activeStarFilter = star;
                 activeStatusFilter = 'all';
                 activeServiceFilter = '';
+                starRows.forEach(item => item.classList.remove('active-star-filter'));
+                this.classList.add('active-star-filter');
 
                 // Reset filter buttons
                 filterButtons.forEach(btn => btn.classList.remove('active'));
@@ -490,10 +526,12 @@
         replyButtons.forEach(btn => {
             btn.addEventListener('click', function() {
                 currentFeedbackId = this.getAttribute('data-feedback-id');
+                currentReplyUrl = this.getAttribute('data-reply-url');
                 const customerName = this.getAttribute('data-feedback-name');
 
                 customerNameInput.value = customerName;
                 replyContentInput.value = '';
+                replyMessage.textContent = '';
 
                 // Hiển thị modal
                 replyModal.classList.remove('hidden');
@@ -505,21 +543,37 @@
             btn.addEventListener('click', function() {
                 replyModal.classList.add('hidden');
                 replyForm.reset();
+                replyMessage.textContent = '';
             });
         });
 
         // Gửi phản hồi
-        replyForm.addEventListener('submit', function(e) {
+        replyForm.addEventListener('submit', async function(e) {
             e.preventDefault();
             const replyContent = replyContentInput.value;
+            replyMessage.style.color = '#ef4444';
+            replyMessage.textContent = '';
 
             if (!replyContent.trim()) {
-                alert('Vui lòng nhập nội dung phản hồi');
+                replyMessage.textContent = 'Vui lòng nhập nội dung phản hồi';
+                return;
+            }
+
+            const formData = new FormData(replyForm);
+            formData.append('reply_content', replyContent);
+            const response = await fetch(currentReplyUrl, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const payload = await response.json();
+            if (!response.ok || payload.status !== 'success') {
+                replyMessage.textContent = payload.message || 'Gửi phản hồi thất bại.';
                 return;
             }
 
             // Tìm thẻ feedback-card và cập nhật
-            const feedbackCard = document.querySelector(`[data-feedback-id="${currentFeedbackId}"]`)?.closest('.feedback-card');
+            const feedbackCard = document.querySelector(`[data-feedback-card-id="${currentFeedbackId}"]`);
             if (feedbackCard) {
                 // Cập nhật status
                 feedbackCard.setAttribute('data-status', 'responded');
@@ -528,7 +582,7 @@
                 const footer = feedbackCard.querySelector('.feedback-footer');
                 footer.innerHTML = `
                     <span class="status-badge green"><span class="icon-check">✔</span> Đã phản hồi</span>
-                    <a class="secondary-btn small-btn" href="/phan-hoi/${currentFeedbackId}/">Xem</a>
+                    <a class="secondary-btn small-btn" href="/quan-ly/phan-hoi/${currentFeedbackId}/">Xem</a>
                 `;
 
                 // Thêm phần hiển thị phản hồi
@@ -536,7 +590,7 @@
                 replyDiv.style.cssText = 'margin-top: 1rem; padding: 1rem; background: #f0f8f5; border-left: 3px solid #1aaf5d; border-radius: 0.5rem;';
                 replyDiv.innerHTML = `
                     <p style="margin: 0 0 0.5rem 0; font-weight: 600; color: #1aaf5d;">Phản hồi từ MAI TRÂM:</p>
-                    <p style="margin: 0; color: #333; line-height: 1.5;">${replyContent}</p>
+                    <p style="margin: 0; color: #333; line-height: 1.5;">${payload.review.reply_content}</p>
                 `;
                 feedbackCard.appendChild(replyDiv);
             }
@@ -544,7 +598,8 @@
             // Đóng modal
             replyModal.classList.add('hidden');
             replyForm.reset();
-            alert('Gửi phản hồi thành công!');
+            replyMessage.textContent = '';
+            alert(payload.message || 'Gửi phản hồi thành công!');
         });
     });
     </script>

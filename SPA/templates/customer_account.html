@@ -86,6 +86,43 @@
             background: #fee2e2;
             border-color: #fca5a5;
         }
+
+        .review-history-btn,
+        .review-done-pill {
+            border: 0;
+            border-radius: 999px;
+            padding: 9px 14px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .review-history-btn {
+            background: #ff6495;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        .review-done-pill {
+            background: #ecfdf5;
+            color: #047857;
+            font-size: 14px;
+        }
+
+        .rating-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .rating-row label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: #ff6495;
+            font-weight: 700;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -146,6 +183,15 @@
                             data-time="{{ item.time|default:'' }}"
                             data-price="{{ item.price|default:'' }}"
                             data-status="{{ item.status|default:'' }}"
+                            data-raw-status="{{ item.raw_status|default:'' }}"
+                            data-booking-id="{{ item.booking_id|default:'' }}"
+                            data-can-review="{{ item.can_review|yesno:'true,false' }}"
+                            data-has-review="{{ item.has_review|yesno:'true,false' }}"
+                            data-review-url="{{ item.review_url|default:'' }}"
+                            data-review-rating="{{ item.review_rating|default:'' }}"
+                            data-review-content="{{ item.review_content|default:'' }}"
+                            data-review-reply-status="{{ item.review_reply_status|default:'' }}"
+                            data-review-reply-content="{{ item.review_reply_content|default:'' }}"
                             data-can-cancel="{{ item.can_cancel|yesno:'true,false' }}"
                             data-cancel-url="{{ item.cancel_url|default:'' }}"
                             data-desc="{{ item.desc|default:'' }}"
@@ -160,6 +206,11 @@
                             </div>
                             <span class="history-status">{{ item.status }}</span>
                             <strong class="history-price">{{ item.price }}</strong>
+                            {% if item.can_review %}
+                            <button type="button" class="review-history-btn" data-open-review>Đánh giá</button>
+                            {% elif item.has_review %}
+                            <span class="review-done-pill">Đã đánh giá</span>
+                            {% endif %}
                         </article>
                         {% endfor %}
                     </div>
@@ -327,20 +378,54 @@
                 const closeModalBtn = document.getElementById('closeModalBtn');
                 const modalDetails = document.getElementById('modalDetails');
 
-                historyArticles.forEach(article => {
-                    article.addEventListener('click', function() {
-                        // Lôi data từ các thuộc tính data-*
-                        const d = this.dataset;
-                        const csrfToken = document.getElementById('historyCsrfToken')?.value || '';
-                        const cancelAction = d.canCancel === 'true' && d.cancelUrl ? `
-                            <form method="post" action="${d.cancelUrl}" onsubmit="return confirm('Bạn chắc chắn muốn hủy lịch này?');" style="margin-top: 14px;">
-                                <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
-                                <button type="submit" style="border: 0; border-radius: 10px; padding: 11px 18px; background: #ef4444; color: #fff; font-weight: 700; cursor: pointer;">Hủy lịch</button>
-                            </form>
-                        ` : '';
+                const renderStars = () => [5, 4, 3, 2, 1].map(star => `
+                    <label>
+                        <input type="radio" name="rating" value="${star}" ${star === 5 ? 'checked' : ''}>
+                        ${star} sao
+                    </label>
+                `).join('');
 
-                        // Vẽ ra giao diện 2 box y chang ảnh xác nhận đặt lịch
-                        modalDetails.innerHTML = `
+                function openHistoryModal(d, openReviewForm = false) {
+                    const csrfToken = document.getElementById('historyCsrfToken')?.value || '';
+                    const cancelAction = d.canCancel === 'true' && d.cancelUrl ? `
+                        <form method="post" action="${d.cancelUrl}" onsubmit="return confirm('Bạn chắc chắn muốn hủy lịch này?');" style="margin-top: 14px;">
+                            <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                            <button type="submit" style="border: 0; border-radius: 10px; padding: 11px 18px; background: #ef4444; color: #fff; font-weight: 700; cursor: pointer;">Hủy lịch</button>
+                        </form>
+                    ` : '';
+                    const reviewAction = d.canReview === 'true' ? `
+                        <button type="button" data-inline-review-trigger style="border: 0; border-radius: 10px; padding: 11px 18px; background: #ff6495; color: #fff; font-weight: 700; cursor: pointer; margin-top: 14px;">Đánh giá</button>
+                    ` : '';
+                    const currentReview = d.hasReview === 'true' ? `
+                        <div style="margin-top: 14px; padding: 14px; border-radius: 10px; background: #ecfdf5; color: #065f46;">
+                            <strong>Đã đánh giá: ${d.reviewRating} sao</strong>
+                            <p style="margin: 8px 0 0;">${d.reviewContent}</p>
+                            ${d.reviewReplyContent ? `
+                                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #a7f3d0;">
+                                    <strong>Phản hồi từ MAI TRÂM</strong>
+                                    <p style="margin: 8px 0 0;">${d.reviewReplyContent}</p>
+                                </div>
+                            ` : `
+                                <div style="margin-top: 12px; color: #92400e;">Spa chưa phản hồi đánh giá này.</div>
+                            `}
+                        </div>
+                    ` : '';
+                    const reviewForm = d.canReview === 'true' ? `
+                        <div id="reviewFormPanel" style="${openReviewForm ? '' : 'display:none;'} flex: 1 1 100%; border: 1px solid #fbcfe8; border-radius: 12px; padding: 24px;">
+                            <h3 style="margin: 0 0 12px 0; font-size: 20px; color: #111827;">Đánh giá dịch vụ ${d.service}</h3>
+                            <form id="bookingReviewForm" data-review-url="${d.reviewUrl}">
+                                <input type="hidden" name="csrfmiddlewaretoken" value="${csrfToken}">
+                                <div style="font-size: 15px; color: #4b5563; margin-bottom: 10px;">Số sao</div>
+                                <div class="rating-row">${renderStars()}</div>
+                                <div style="font-size: 15px; color: #4b5563; margin: 16px 0 8px;">Nội dung đánh giá</div>
+                                <textarea name="content" required minlength="10" placeholder="Chia sẻ cảm nhận của bạn về dịch vụ đã sử dụng" style="width: 100%; min-height: 110px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; resize: vertical; font-family: inherit;"></textarea>
+                                <div data-review-message style="min-height: 20px; margin-top: 10px; color: #ef4444; font-weight: 600;"></div>
+                                <button type="submit" style="border: 0; border-radius: 10px; padding: 11px 18px; background: #ff6495; color: #fff; font-weight: 700; cursor: pointer; margin-top: 10px;">Gửi đánh giá</button>
+                            </form>
+                        </div>
+                    ` : '';
+
+                    modalDetails.innerHTML = `
                             <!-- Ô TRÁI: THÔNG TIN ĐẶT LỊCH -->
                             <div style="flex: 1; min-width: 300px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 12px;">
                                 <h3 style="margin: 0 0 10px 0; font-size: 20px; color: #111827;">Thông tin đặt lịch</h3>
@@ -353,6 +438,8 @@
                                 <div style="font-size: 15px; color: #4b5563;">Trạng thái: <strong style="color: #ff4f86;">${d.status}</strong></div>
                                 <div style="font-size: 15px; color: #4b5563;">Mô tả gói: <strong style="color: #111827;">${d.desc}</strong></div>
                                 ${cancelAction}
+                                ${reviewAction}
+                                ${currentReview}
                             </div>
 
                             <!-- Ô PHẢI: THÔNG TIN KHÁCH HÀNG -->
@@ -365,10 +452,69 @@
                                 <div style="margin-top: 10px; font-size: 15px; color: #4b5563;">Ghi chú</div>
                                 <textarea disabled style="width: 100%; height: 100px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb; color: #6b7280; resize: none; font-family: inherit;">${d.cnotes}</textarea>
                             </div>
+                            ${reviewForm}
                         `;
 
-                        historyModal.style.display = 'flex'; // Bật Popup lên
+                    historyModal.style.display = 'flex'; // Bật Popup lên
+
+                    const inlineReviewTrigger = modalDetails.querySelector('[data-inline-review-trigger]');
+                    const reviewPanel = document.getElementById('reviewFormPanel');
+                    if (inlineReviewTrigger && reviewPanel) {
+                        inlineReviewTrigger.addEventListener('click', () => {
+                            reviewPanel.style.display = '';
+                        });
+                    }
+
+                    const reviewFormElement = document.getElementById('bookingReviewForm');
+                    if (reviewFormElement) {
+                        reviewFormElement.addEventListener('submit', async (event) => {
+                            event.preventDefault();
+                            const messageBox = reviewFormElement.querySelector('[data-review-message]');
+                            messageBox.style.color = '#ef4444';
+                            messageBox.textContent = '';
+                            const response = await fetch(reviewFormElement.dataset.reviewUrl, {
+                                method: 'POST',
+                                body: new FormData(reviewFormElement),
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                            });
+                            const payload = await response.json();
+                            if (!response.ok || payload.status !== 'success') {
+                                messageBox.textContent = payload.message || 'Gửi đánh giá thất bại.';
+                                return;
+                            }
+                            messageBox.style.color = '#047857';
+                            messageBox.textContent = payload.message;
+                            const card = document.querySelector(`.history-item[data-booking-id="${d.bookingId}"]`);
+                            if (card) {
+                                card.dataset.canReview = 'false';
+                                card.dataset.hasReview = 'true';
+                                card.dataset.reviewRating = payload.review.rating;
+                                card.dataset.reviewContent = payload.review.content;
+                                const btn = card.querySelector('[data-open-review]');
+                                if (btn) {
+                                    btn.outerHTML = '<span class="review-done-pill">Đã đánh giá</span>';
+                                }
+                            }
+                            setTimeout(() => window.location.reload(), 700);
+                        });
+                    }
+                }
+
+                historyArticles.forEach(article => {
+                    article.addEventListener('click', function(event) {
+                        if (event.target.closest('[data-open-review]')) {
+                            return;
+                        }
+                        openHistoryModal(this.dataset, false);
                     });
+
+                    const reviewButton = article.querySelector('[data-open-review]');
+                    if (reviewButton) {
+                        reviewButton.addEventListener('click', function(event) {
+                            event.stopPropagation();
+                            openHistoryModal(article.dataset, true);
+                        });
+                    }
                 });
 
                 // Lệnh đóng form (bấm nút X hoặc bấm ra ngoài nền đen)
